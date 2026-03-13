@@ -1,10 +1,12 @@
 # tmuxinator-team-workflows
 
-Share **tmuxinator workflows across teams** while allowing developers to customize their own local development environment.
+Share tmuxinator workflows across teams 🤝  
+Allow developers to customize their local development environment and start complex setups with a single command 🚀  
+Less terminal juggling, faster onboarding, and smoother context switching ⚡
 
-This project adds a lightweight collaboration layer on top of **tmuxinator**. Teams can share workflow setups, while developers can extend them locally.
+This project adds a lightweight collaboration layer on top of tmuxinator. Teams can share workflow setups, while developers can extend them locally.
 
-tmuxinator itself is **intentionally not abstracted away**. Developers still use tmuxinator directly and keep access to the full power of **tmux** and **tmuxinator**.
+tmuxinator itself is intentionally not abstracted away. Developers still use tmuxinator directly and keep access to the full power of tmux and tmuxinator.
 
 ---
 
@@ -25,7 +27,7 @@ This leads to inconsistent setups, slower onboarding, and repetitive work.
 
 # The solution
 
-**tmuxinator-team-workflows** lets teams version-control and share tmuxinator workflows.
+**tmuxinator-team-workflows** lets teams version‑control and share tmuxinator workflows.
 
 - teams define shared workflows
 - developers install them once
@@ -69,13 +71,13 @@ Shared workflows and personal customization are separated.
 
 | Folder | Purpose |
 |------|------|
-| templates/ | Team-maintained workflows |
-| developer/ | Developer-specific copies |
+| templates/ | Team‑maintained workflows |
+| developer/ | Developer‑specific copies |
 | .internal/ | Installer metadata |
 
 Installation flow:
 
-```text
+```
 Team workflow
    │
    ▼
@@ -97,7 +99,7 @@ tmuxinator start <project>
 
 # Repository structure
 
-```text
+```
 .
 ├── install.sh
 ├── uninstall.sh
@@ -111,7 +113,7 @@ tmuxinator start <project>
 
 During installation an internal folder is created:
 
-```text
+```
 .internal/
   env.sh
   install-manifest.txt
@@ -139,7 +141,7 @@ The installer:
 - copies workflows from `templates/` to `developer/`
 - creates symlinks in:
 
-```text
+```
 ~/.config/tmuxinator
 ```
 
@@ -163,7 +165,7 @@ This allows each developer to keep repositories in different local directories.
 
 Team changes belong in:
 
-```text
+```
 templates/
 ```
 
@@ -179,7 +181,7 @@ Examples:
 
 Developers modify their own copy in:
 
-```text
+```
 developer/
 ```
 
@@ -197,7 +199,7 @@ If a change benefits the team, move it back into `templates/`.
 
 Developers can add optional override files such as:
 
-```text
+```
 developer/example-project.override.yml
 ```
 
