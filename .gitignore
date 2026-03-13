@@ -1,0 +1,4 @@
+/local/*
+!/local/.gitkeep
+!/local/example-project.override.example.yml
+/.internal/

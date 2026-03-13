@@ -1,0 +1,2 @@
+panes:
+  - "bash -lc 'echo \"Project root: $(pwd)\"; echo \"Shared template loaded\"; exec \"${SHELL:-/bin/bash}\" -l'"
