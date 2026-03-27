@@ -12,6 +12,8 @@ RUNTIME_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
 DEFAULT_TWF_HOME="${HOME}/.local/share/twf"
 DEFAULT_TWF_BIN_DIR="${HOME}/.local/bin"
 TMUXINATOR_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tmuxinator"
+PLUGINS_DIR="$RUNTIME_DIR/plugins"
+PLUGIN_STATE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/twf/state/plugins"
 
 ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
 info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
@@ -27,6 +29,7 @@ Commands:
                                Create workflow repo (if empty) or add a project
   remove <project-name> [--yes]
                                Remove tmuxinator alias; optionally remove local files
+  plugin <command> [...]       Manage project plugins
   validate                     Validate templates in current workflow repo
   doctor                       Run environment and template diagnostics
   update                       Pull latest twf runtime repo
@@ -40,6 +43,8 @@ Examples:
   twf add landing-site
   twf add landing-site --dry-run
   twf remove landing-site
+  twf plugin add node --project landing-site
+  twf plugin install --project landing-site
   twf validate
   twf doctor
   twf update
@@ -88,6 +93,228 @@ require_workflow_repo() {
     exit 1
   fi
   echo "$repo"
+}
+
+plugin_script_path() {
+  local plugin_name="$1"
+  echo "$PLUGINS_DIR/$plugin_name.sh"
+}
+
+plugin_exists() {
+  local plugin_name="$1"
+  [[ -f "$(plugin_script_path "$plugin_name")" ]]
+}
+
+require_plugin() {
+  local plugin_name="$1"
+  if ! plugin_exists "$plugin_name"; then
+    error "Unknown plugin: $plugin_name"
+    info "Run 'twf plugin list' to see available plugins."
+    exit 1
+  fi
+}
+
+list_available_plugins() {
+  if [[ ! -d "$PLUGINS_DIR" ]]; then
+    return 0
+  fi
+
+  local files=()
+  local file
+  shopt -s nullglob
+  files=("$PLUGINS_DIR"/*.sh)
+  shopt -u nullglob
+
+  for file in "${files[@]}"; do
+    basename "${file%.sh}"
+  done
+}
+
+hash_text() {
+  local value="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$value" | shasum -a 256 | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    printf '%s' "$value" | openssl dgst -sha256 | awk '{print $NF}'
+  else
+    printf '%s' "$value" | cksum | awk '{print $1}'
+  fi
+}
+
+project_template_file() {
+  local repo="$1"
+  local project_name="$2"
+  echo "$repo/templates/projects/$project_name.yml"
+}
+
+project_override_file() {
+  local repo="$1"
+  local project_name="$2"
+  echo "$repo/developer/projects/$project_name.override.yml"
+}
+
+ensure_project_exists() {
+  local repo="$1"
+  local project_name="$2"
+  local template_file
+  template_file="$(project_template_file "$repo" "$project_name")"
+
+  if [[ ! -f "$template_file" ]]; then
+    error "Project template not found: $template_file"
+    info "Add the project first: twf add $project_name"
+    exit 1
+  fi
+}
+
+enabled_plugins_for_project() {
+  local repo="$1"
+  local project_name="$2"
+  local override_file
+  override_file="$(project_override_file "$repo" "$project_name")"
+
+  ruby -ryaml -e '
+path = ARGV[0]
+if !File.exist?(path)
+  exit 0
+end
+raw = YAML.safe_load(File.read(path), aliases: false)
+data = raw.is_a?(Hash) ? raw : {}
+plugins = data["plugins"].is_a?(Hash) ? data["plugins"] : {}
+enabled = plugins["enabled"].is_a?(Array) ? plugins["enabled"] : []
+enabled.select { |v| v.is_a?(String) && !v.strip.empty? }.each { |v| puts v }
+' "$override_file"
+}
+
+plugin_config_json_for_project() {
+  local repo="$1"
+  local project_name="$2"
+  local plugin_name="$3"
+  local override_file
+  override_file="$(project_override_file "$repo" "$project_name")"
+
+  ruby -ryaml -rjson -e '
+path = ARGV[0]
+plugin = ARGV[1]
+if !File.exist?(path)
+  puts "{}"
+  exit 0
+end
+raw = YAML.safe_load(File.read(path), aliases: false)
+data = raw.is_a?(Hash) ? raw : {}
+plugins = data["plugins"].is_a?(Hash) ? data["plugins"] : {}
+config = plugins["config"].is_a?(Hash) ? plugins["config"] : {}
+value = config[plugin]
+value = {} unless value.is_a?(Hash)
+puts JSON.generate(value)
+' "$override_file" "$plugin_name"
+}
+
+add_plugin_to_project_config() {
+  local repo="$1"
+  local project_name="$2"
+  local plugin_name="$3"
+  local override_file
+  override_file="$(project_override_file "$repo" "$project_name")"
+
+  mkdir -p "$(dirname "$override_file")"
+  [[ -f "$override_file" ]] || printf '{}\n' >"$override_file"
+
+  ruby -ryaml -e '
+path = ARGV[0]
+plugin = ARGV[1]
+raw = YAML.safe_load(File.read(path), aliases: false)
+data = raw.is_a?(Hash) ? raw : {}
+data["plugins"] = {} unless data["plugins"].is_a?(Hash)
+plugins = data["plugins"]
+plugins["enabled"] = [] unless plugins["enabled"].is_a?(Array)
+enabled = plugins["enabled"].select { |v| v.is_a?(String) && !v.strip.empty? }
+enabled << plugin unless enabled.include?(plugin)
+plugins["enabled"] = enabled
+File.write(path, data.to_yaml(line_width: -1))
+' "$override_file" "$plugin_name"
+}
+
+remove_plugin_from_project_config() {
+  local repo="$1"
+  local project_name="$2"
+  local plugin_name="$3"
+  local override_file
+  override_file="$(project_override_file "$repo" "$project_name")"
+
+  if [[ ! -f "$override_file" ]]; then
+    return 0
+  fi
+
+  ruby -ryaml -e '
+path = ARGV[0]
+plugin = ARGV[1]
+raw = YAML.safe_load(File.read(path), aliases: false)
+data = raw.is_a?(Hash) ? raw : {}
+plugins = data["plugins"].is_a?(Hash) ? data["plugins"] : nil
+if plugins
+  if plugins["enabled"].is_a?(Array)
+    plugins["enabled"] = plugins["enabled"].select { |v| v.is_a?(String) && v != plugin }
+  end
+  if plugins["config"].is_a?(Hash)
+    plugins["config"].delete(plugin)
+  end
+  plugins.delete("enabled") if plugins["enabled"].is_a?(Array) && plugins["enabled"].empty?
+  plugins.delete("config") if plugins["config"].is_a?(Hash) && plugins["config"].empty?
+  data.delete("plugins") if plugins.empty?
+end
+File.write(path, data.to_yaml(line_width: -1))
+' "$override_file" "$plugin_name"
+}
+
+plugin_state_file() {
+  local project_name="$1"
+  local plugin_name="$2"
+  echo "$PLUGIN_STATE_ROOT/$project_name/$plugin_name.state"
+}
+
+plugin_version() {
+  local plugin_name="$1"
+  local plugin_script
+  plugin_script="$(plugin_script_path "$plugin_name")"
+  bash "$plugin_script" version
+}
+
+plugin_state_matches() {
+  local project_name="$1"
+  local plugin_name="$2"
+  local expected_version="$3"
+  local expected_hash="$4"
+  local state_file
+  state_file="$(plugin_state_file "$project_name" "$plugin_name")"
+
+  [[ -f "$state_file" ]] || return 1
+
+  local saved_version=""
+  local saved_hash=""
+  while IFS='=' read -r key value; do
+    case "$key" in
+    VERSION) saved_version="$value" ;;
+    CONFIG_HASH) saved_hash="$value" ;;
+    esac
+  done <"$state_file"
+
+  [[ "$saved_version" == "$expected_version" && "$saved_hash" == "$expected_hash" ]]
+}
+
+write_plugin_state() {
+  local project_name="$1"
+  local plugin_name="$2"
+  local version="$3"
+  local config_hash="$4"
+  local state_file
+  state_file="$(plugin_state_file "$project_name" "$plugin_name")"
+
+  mkdir -p "$(dirname "$state_file")"
+  cat >"$state_file" <<EOF
+VERSION=$version
+CONFIG_HASH=$config_hash
+UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
 }
 
 ensure_bin_on_path() {
@@ -170,7 +397,7 @@ This repository is managed with \`twf\` and is intended to live outside applicat
 Typical flow:
 
 \`\`\`bash
-twf add $first_project
+twf plugin install --project $first_project
 twf validate
 twf doctor
 twf start $first_project
@@ -495,6 +722,354 @@ EOF
   fi
 }
 
+run_plugin_install_for_project() {
+  local repo="$1"
+  local project_name="$2"
+  local assume_yes="$3"
+
+  ensure_project_exists "$repo" "$project_name"
+
+  local enabled_plugins=()
+  local plugin
+  while IFS= read -r plugin; do
+    [[ -n "$plugin" ]] || continue
+    enabled_plugins+=("$plugin")
+  done < <(enabled_plugins_for_project "$repo" "$project_name")
+
+  if [[ ${#enabled_plugins[@]} -eq 0 ]]; then
+    info "No plugins configured for project '$project_name'."
+    return 0
+  fi
+
+  for plugin in "${enabled_plugins[@]}"; do
+    require_plugin "$plugin"
+
+    local plugin_script
+    plugin_script="$(plugin_script_path "$plugin")"
+    local plugin_ver
+    plugin_ver="$(plugin_version "$plugin")"
+    local plugin_cfg
+    plugin_cfg="$(plugin_config_json_for_project "$repo" "$project_name" "$plugin")"
+    local plugin_hash
+    plugin_hash="$(hash_text "$plugin_cfg")"
+
+    if plugin_state_matches "$project_name" "$plugin" "$plugin_ver" "$plugin_hash"; then
+      ok "Plugin '$plugin' is already installed for project '$project_name'"
+      continue
+    fi
+
+    info "Installing plugin '$plugin' for project '$project_name'"
+    if ! TWF_PLUGIN_CONFIG_JSON="$plugin_cfg" TWF_PLUGIN_ASSUME_YES="$assume_yes" bash "$plugin_script" install; then
+      error "Plugin install failed: $plugin"
+      exit 1
+    fi
+
+    if ! TWF_PLUGIN_CONFIG_JSON="$plugin_cfg" bash "$plugin_script" check; then
+      error "Plugin check failed after install: $plugin"
+      exit 1
+    fi
+
+    write_plugin_state "$project_name" "$plugin" "$plugin_ver" "$plugin_hash"
+    ok "Plugin ready: $plugin"
+  done
+}
+
+check_plugins_ready_for_project() {
+  local repo="$1"
+  local project_name="$2"
+
+  ensure_project_exists "$repo" "$project_name"
+
+  local enabled_plugins=()
+  local plugin
+  while IFS= read -r plugin; do
+    [[ -n "$plugin" ]] || continue
+    enabled_plugins+=("$plugin")
+  done < <(enabled_plugins_for_project "$repo" "$project_name")
+
+  if [[ ${#enabled_plugins[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  for plugin in "${enabled_plugins[@]}"; do
+    require_plugin "$plugin"
+    local plugin_ver
+    plugin_ver="$(plugin_version "$plugin")"
+    local plugin_cfg
+    plugin_cfg="$(plugin_config_json_for_project "$repo" "$project_name" "$plugin")"
+    local plugin_hash
+    plugin_hash="$(hash_text "$plugin_cfg")"
+
+    if ! plugin_state_matches "$project_name" "$plugin" "$plugin_ver" "$plugin_hash"; then
+      error "Plugin '$plugin' is not installed or is out of date for project '$project_name'"
+      info "Run: twf plugin install --project $project_name"
+      exit 1
+    fi
+  done
+}
+
+cmd_plugin() {
+  local subcommand="${1:-}"
+  shift || true
+
+  case "$subcommand" in
+  add)
+    local plugin_name=""
+    local project_name=""
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+      --project)
+        [[ $# -ge 2 ]] || {
+          error "--project requires a project name"
+          exit 1
+        }
+        project_name="$2"
+        shift 2
+        ;;
+      *)
+        if [[ -z "$plugin_name" ]]; then
+          plugin_name="$1"
+          shift
+        else
+          error "Unexpected argument: $1"
+          exit 1
+        fi
+        ;;
+      esac
+    done
+
+    [[ -n "$plugin_name" ]] || {
+      error "Missing plugin name"
+      info "Usage: twf plugin add <plugin> --project <project>"
+      exit 1
+    }
+    [[ -n "$project_name" ]] || {
+      error "Missing --project"
+      info "Usage: twf plugin add <plugin> --project <project>"
+      exit 1
+    }
+
+    validate_project_name "$project_name"
+    require_plugin "$plugin_name"
+
+    local repo
+    repo="$(require_workflow_repo)"
+    ensure_project_exists "$repo" "$project_name"
+
+    add_plugin_to_project_config "$repo" "$project_name" "$plugin_name"
+    ok "Added plugin '$plugin_name' to project '$project_name'"
+    info "Run: twf plugin install --project $project_name"
+    ;;
+  remove)
+    local plugin_name=""
+    local project_name=""
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+      --project)
+        [[ $# -ge 2 ]] || {
+          error "--project requires a project name"
+          exit 1
+        }
+        project_name="$2"
+        shift 2
+        ;;
+      *)
+        if [[ -z "$plugin_name" ]]; then
+          plugin_name="$1"
+          shift
+        else
+          error "Unexpected argument: $1"
+          exit 1
+        fi
+        ;;
+      esac
+    done
+
+    [[ -n "$plugin_name" ]] || {
+      error "Missing plugin name"
+      info "Usage: twf plugin remove <plugin> --project <project>"
+      exit 1
+    }
+    [[ -n "$project_name" ]] || {
+      error "Missing --project"
+      info "Usage: twf plugin remove <plugin> --project <project>"
+      exit 1
+    }
+
+    validate_project_name "$project_name"
+
+    local repo
+    repo="$(require_workflow_repo)"
+    ensure_project_exists "$repo" "$project_name"
+
+    remove_plugin_from_project_config "$repo" "$project_name" "$plugin_name"
+    ok "Removed plugin '$plugin_name' from project '$project_name'"
+    ;;
+  list)
+    local project_name=""
+    local global=false
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+      --project)
+        [[ $# -ge 2 ]] || {
+          error "--project requires a project name"
+          exit 1
+        }
+        project_name="$2"
+        shift 2
+        ;;
+      --global)
+        global=true
+        shift
+        ;;
+      *)
+        error "Unexpected argument: $1"
+        exit 1
+        ;;
+      esac
+    done
+
+    if [[ -n "$project_name" && "$global" == true ]]; then
+      error "Use either --project or --global, not both"
+      exit 1
+    fi
+
+    echo "Available plugins:"
+    local available=()
+    local p
+    while IFS= read -r p; do
+      [[ -n "$p" ]] || continue
+      available+=("$p")
+      echo "  - $p"
+    done < <(list_available_plugins)
+    if [[ ${#available[@]} -eq 0 ]]; then
+      echo "  (none)"
+    fi
+
+    local repo
+    repo="$(require_workflow_repo)"
+
+    if [[ -n "$project_name" ]]; then
+      validate_project_name "$project_name"
+      ensure_project_exists "$repo" "$project_name"
+      echo
+      echo "Configured plugins for '$project_name':"
+      local any=false
+      while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        any=true
+        echo "  - $p"
+      done < <(enabled_plugins_for_project "$repo" "$project_name")
+      [[ "$any" == true ]] || echo "  (none)"
+      return 0
+    fi
+
+    if [[ "$global" == true ]]; then
+      echo
+      echo "Configured plugins by project:"
+      local files=()
+      local f
+      shopt -s nullglob
+      files=("$repo/templates/projects"/*.yml)
+      shopt -u nullglob
+      for f in "${files[@]}"; do
+        local proj
+        proj="$(basename "${f%.yml}")"
+        echo "- $proj"
+        local any=false
+        while IFS= read -r p; do
+          [[ -n "$p" ]] || continue
+          any=true
+          echo "    - $p"
+        done < <(enabled_plugins_for_project "$repo" "$proj")
+        [[ "$any" == true ]] || echo "    (none)"
+      done
+      return 0
+    fi
+    ;;
+  install)
+    local project_name=""
+    local global=false
+    local assume_yes=false
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+      --project)
+        [[ $# -ge 2 ]] || {
+          error "--project requires a project name"
+          exit 1
+        }
+        project_name="$2"
+        shift 2
+        ;;
+      --global)
+        global=true
+        shift
+        ;;
+      --yes)
+        assume_yes=true
+        shift
+        ;;
+      *)
+        error "Unexpected argument: $1"
+        exit 1
+        ;;
+      esac
+    done
+
+    if [[ -n "$project_name" && "$global" == true ]]; then
+      error "Use either --project or --global, not both"
+      exit 1
+    fi
+
+    if [[ -z "$project_name" && "$global" != true ]]; then
+      error "Missing scope: use --project <name> or --global"
+      exit 1
+    fi
+
+    local repo
+    repo="$(require_workflow_repo)"
+
+    if [[ -n "$project_name" ]]; then
+      validate_project_name "$project_name"
+      run_plugin_install_for_project "$repo" "$project_name" "$assume_yes"
+      return 0
+    fi
+
+    local files=()
+    local f
+    shopt -s nullglob
+    files=("$repo/templates/projects"/*.yml)
+    shopt -u nullglob
+    for f in "${files[@]}"; do
+      local proj
+      proj="$(basename "${f%.yml}")"
+      run_plugin_install_for_project "$repo" "$proj" "$assume_yes"
+    done
+    ;;
+  help | -h | --help | "")
+    cat <<'EOF'
+Usage: twf plugin <command> [options]
+
+Commands:
+  add <plugin> --project <project>
+  remove <plugin> --project <project>
+  list [--project <project> | --global]
+  install --project <project> [--yes]
+  install --global [--yes]
+EOF
+    ;;
+  *)
+    error "Unknown plugin subcommand: $subcommand"
+    info "Run: twf plugin --help"
+    exit 1
+    ;;
+  esac
+}
+
 cmd_validate() {
   local workflow_repo
   workflow_repo="$(require_workflow_repo)"
@@ -574,6 +1149,34 @@ cmd_list() {
   fi
 }
 
+workflow_repo_from_alias() {
+  local project_name="$1"
+  local alias_file="$TMUXINATOR_DIR/$project_name.yml"
+
+  [[ -L "$alias_file" ]] || {
+    echo ""
+    return 0
+  }
+
+  local target
+  target="$(readlink "$alias_file")"
+  if [[ "$target" != /* ]]; then
+    target="$(cd "$(dirname "$alias_file")" && pwd)/$target"
+  fi
+
+  local expected_suffix="/templates/projects/$project_name.yml"
+  if [[ "$target" == *"$expected_suffix" ]]; then
+    local repo
+    repo="${target%$expected_suffix}"
+    if is_workflow_repo "$repo"; then
+      echo "$repo"
+      return 0
+    fi
+  fi
+
+  echo ""
+}
+
 cmd_start() {
   if [[ $# -lt 1 ]]; then
     error "Missing project name"
@@ -613,6 +1216,15 @@ cmd_start() {
   if [[ ! -L "$alias_file" && ! -f "$alias_file" ]]; then
     error "Project alias path is not a file: $alias_file"
     exit 1
+  fi
+
+  workflow_repo="$(detect_workflow_repo)"
+  if [[ -z "$workflow_repo" ]]; then
+    workflow_repo="$(workflow_repo_from_alias "$project_name")"
+  fi
+
+  if [[ -n "$workflow_repo" ]]; then
+    check_plugins_ready_for_project "$workflow_repo" "$project_name"
   fi
 
   tmuxinator start "$project_name" "$@"
@@ -704,6 +1316,9 @@ main() {
     ;;
   remove)
     cmd_remove "$@"
+    ;;
+  plugin)
+    cmd_plugin "$@"
     ;;
   validate)
     cmd_validate "$@"

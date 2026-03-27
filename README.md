@@ -89,12 +89,59 @@ If a tmuxinator alias already exists, `twf add` prompts:
 
 With `--dry-run`, rename/replace is still prompted, but no files are written and no replacement confirmation is asked.
 
+## Plugins per project
+
+Plugins are configured per project and installed per machine.
+
+Add plugins to a project configuration:
+
+```bash
+twf plugin add node --project my-workflow
+twf plugin add dotnet --project my-workflow
+```
+
+Install configured plugins for one project:
+
+```bash
+twf plugin install --project my-workflow
+```
+
+Install configured plugins for all projects in this workflow repo:
+
+```bash
+twf plugin install --global
+```
+
+List plugins:
+
+```bash
+twf plugin list --project my-workflow
+twf plugin list --global
+```
+
+Remove plugin config from a project:
+
+```bash
+twf plugin remove node --project my-workflow
+```
+
+Notes:
+
+- `twf plugin add/remove` updates project config only.
+- `twf plugin install` performs machine-local setup.
+- `twf start <project>` checks plugin install markers and asks for `twf plugin install --project <project>` when missing/outdated.
+
 ## Commands
 
 Run `twf help` for the latest command text.
 
 - `twf add <project-name> [--dry-run]`
 - `twf remove <project-name> [--yes]`
+- `twf plugin add <plugin> --project <project>`
+- `twf plugin remove <plugin> --project <project>`
+- `twf plugin list [--project <project> | --global]`
+- `twf plugin install --project <project> [--yes]`
+- `twf plugin install --global [--yes]`
 - `twf validate`
 - `twf doctor`
 - `twf list`
@@ -108,6 +155,7 @@ Run `twf help` for the latest command text.
 Start via twf:
 
 ```bash
+twf plugin install --project my-workflow
 twf start my-workflow
 ```
 
@@ -179,7 +227,7 @@ Only workflow content should be visible in your repo:
     └── projects/
 ```
 
-Runtime internals (CLI scripts and helper plumbing) stay in `~/.local/share/twf`.
+Runtime internals (CLI scripts, helper plumbing, and plugin implementations) stay in `~/.local/share/twf`.
 
 ## Notes on customization
 
