@@ -1,433 +1,212 @@
 # tmuxinator-team-workflows
 
-Share tmuxinator workflows across teams 🤝  
-Allow developers to customize their local development environment and start complex setups with a single command 🚀  
-Less terminal juggling, faster onboarding, and smoother context switching ⚡
+Shared tmuxinator workflows for teams, with a small CLI (`twf`) for install, scaffolding, validation, and lifecycle tasks.
 
-This project adds a lightweight collaboration layer on top of tmuxinator. Teams can share workflow setups, while developers can extend them locally.
+`tmuxinator` remains the runtime. This project adds a collaboration layer for template sharing and developer overrides.
 
-tmuxinator itself is intentionally not abstracted away. Developers still use tmuxinator directly and keep access to the full power of tmux and tmuxinator.
+## What this is
 
----
+- Team-managed tmuxinator project templates.
+- Personal override support without editing shared templates.
+- A single command surface (`twf`) for common workflows.
 
-# What this is (and is not)
+## What this is not
 
-**What this is:**
+- Not a tmuxinator replacement.
+- Not a generic dev environment orchestrator.
+- Not another tmux session schema.
 
-- a team workflow sharing layer on top of tmuxinator
-- a way to version and distribute shared tmux workflows
-- a clean model for team defaults (`templates/`) + personal overrides (`developer/`)
+## Quick start
 
-**What this is not:**
-
-- not a replacement for tmuxinator
-- not another tmux session schema like tmuxp or teamocil
-- not a generic container/dev-environment orchestrator
-
-In short: tmuxinator runs sessions; this project helps teams collaborate on those sessions.
-
----
-
-# The problem
-
-Modern development environments often require starting multiple services:
-
-- backend APIs
-- frontend dev servers
-- workers
-- logs
-- build tools
-
-Developers usually start these manually across multiple terminals.  
-This leads to inconsistent setups, slower onboarding, and repetitive work.
-
----
-
-# The solution
-
-**tmuxinator-team-workflows** lets teams version‑control and share tmuxinator workflows.
-
-- teams define shared workflows
-- developers install them once
-- developers customize locally without modifying team templates
-
-Start a full environment with:
+Install globally from GitHub:
 
 ```bash
-tmuxinator start example-includes
+curl -fsSL "https://raw.githubusercontent.com/R4YM3/tmuxinator-team-workflows/main/scripts/bootstrap.sh" | bash
 ```
 
-**Less hassle, more action.**
-
----
-
-# Quick start
-
-Clone the repository and install the CLI:
-
-```bash
-./twf install --yes
-```
-
-Add a new project in an empty directory:
+Create a new project scaffold in an empty directory:
 
 ```bash
 mkdir my-workflow && cd my-workflow
 twf add my-workflow
 ```
 
-Validate templates anytime:
+Install project links and env config:
+
+```bash
+twf install --yes
+```
+
+Validate and start:
 
 ```bash
 twf validate
-```
-
-Run a quick environment health check:
-
-```bash
-twf doctor
-```
-
-List available workflows:
-
-```bash
-twf list
-```
-
-Start one:
-
-```bash
 twf start my-workflow
 ```
 
-Remove an installed alias later:
+## CLI commands
+
+Run `twf help` for the latest command text.
+
+- `twf install [args...]` installs/updates CLI link and runs `install.sh`.
+- `twf add <project-name> [--dry-run]` scaffolds a full project in the current directory.
+- `twf remove <project-name> [--yes]` removes tmuxinator alias, then optionally removes local override/template files.
+- `twf validate` validates templates (`check` is an alias).
+- `twf doctor` checks environment and then runs validation.
+- `twf update` pulls latest twf repo and reruns install.
+- `twf list` shows template workflows and installed tmuxinator workflows.
+- `twf start <project> [args...]` runs `tmuxinator start <project>`.
+- `twf uninstall [--yes]` removes global twf CLI install (not project aliases).
+- `twf version` prints the CLI version.
+
+## `twf add` behavior
+
+`twf add` is strict by design:
+
+- Project name is required and must match `^[a-z0-9][a-z0-9-]*$`.
+- `root:` in generated project template is set to `.`.
+- Hard-fails if `~/.config/tmuxinator/<project>.yml` already exists.
+- Hard-fails if destination files already exist in current directory.
+- Supports `--dry-run` to preview generated files.
+
+Scaffold output includes:
+
+- `install.sh`, `uninstall.sh`, `twf`, `.install`
+- `scripts/`, `templates/`, `developer/`
+- `templates/projects/<project>.yml`
+- `developer/projects/<project>.override.yml`
+
+## `twf remove` behavior
+
+`twf remove <project>` does the following:
+
+1. Removes tmuxinator alias file:
+   - `${XDG_CONFIG_HOME:-$HOME/.config}/tmuxinator/<project>.yml`
+2. Prompts to remove (if present):
+   - `developer/projects/<project>.override.yml`
+   - `templates/projects/<project>.yml`
+
+Use non-interactive removal:
 
 ```bash
-twf remove my-workflow
+twf remove my-workflow --yes
 ```
 
----
+## Installation modes
 
-# Remote bootstrap (TODO URL)
-
-The bootstrap script supports an env override for the repository URL so you can test before publishing:
+### 1) Bootstrap (recommended)
 
 ```bash
-curl -fsSL <TODO_GITHUB_RAW_BOOTSTRAP_URL> | TWF_REPO_URL="https://github.com/<org>/tmuxinator-team-workflows.git" bash
+curl -fsSL "https://raw.githubusercontent.com/R4YM3/tmuxinator-team-workflows/main/scripts/bootstrap.sh" | bash
 ```
 
-Local equivalent:
+Default bootstrap settings:
+
+- Repo URL: `https://github.com/R4YM3/tmuxinator-team-workflows.git`
+- Install root: `~/.local/share/twf`
+- CLI symlink: `~/.local/bin/twf`
+
+Optional overrides:
 
 ```bash
-TWF_REPO_URL="https://github.com/<org>/tmuxinator-team-workflows.git" bash scripts/bootstrap.sh
+curl -fsSL "https://raw.githubusercontent.com/R4YM3/tmuxinator-team-workflows/main/scripts/bootstrap.sh" | TWF_REPO_URL="https://github.com/R4YM3/tmuxinator-team-workflows.git" TWF_INSTALL_ROOT="$HOME/.local/share/twf" TWF_BIN_DIR="$HOME/.local/bin" bash
 ```
 
-Until the public URL is finalized, `scripts/bootstrap.sh` hard-fails unless `TWF_REPO_URL` is set.
+### 2) Local repo clone
 
----
-
-# How it works
-
-Shared workflows and personal customization are separated.
-
-| Folder | Purpose |
-|------|------|
-| templates/projects/ | Team‑maintained project workflows |
-| templates/partials/ | Reusable shared workflow blocks |
-| templates/helpers/ | Shared ERB helper methods |
-| developer/projects/ | Developer override files |
-| .internal/ | Installer metadata |
-
-Installation flow:
-
-```
-Team workflow
-   │
-   ▼
-templates/projects/
-   │
-install.sh
-~/.config/tmuxinator
-   │
-   ▼
-tmuxinator start <project>
-
-Developer overrides are read from `developer/projects/*.override.yml` when present.
+```bash
+git clone git@github.com:R4YM3/tmuxinator-team-workflows.git
+cd tmuxinator-team-workflows
+./twf install --yes
 ```
 
----
+## How install works
 
-# Repository structure
+`install.sh` links team templates from `templates/projects/*.yml` into tmuxinator:
 
-```
+- `~/.config/tmuxinator/<project>.yml` -> `templates/projects/<project>.yml`
+
+It also writes installer metadata to `.internal/`:
+
+- `.internal/env.sh`
+- `.internal/install-manifest.txt`
+- `.internal/INFO.md`
+
+and optionally adds a shell rc block that sources `.internal/env.sh`.
+
+Environment variables used by template rendering:
+
+- `REPOSITORIES_ROOT`
+- `TEAM_WORKFLOWS_REPO_DIR`
+- `TEAM_WORKFLOWS_HELPER_FILE`
+
+## Project structure
+
+```text
 .
 ├── twf
 ├── install.sh
 ├── uninstall.sh
 ├── scripts/
 │   ├── bootstrap.sh
-│   ├── validate-workflows.sh
 │   ├── doctor.sh
-│   └── new-workflow.sh
+│   ├── new-workflow.sh
+│   └── validate-workflows.sh
 ├── templates/
 │   ├── helpers/
-│   │   └── workflow.rb
-│   ├── projects/
-│   │   └── example-includes.yml
-│   └── partials/
-│       └── ...
-├── developer/
+│   ├── partials/
 │   └── projects/
-│       └── example-includes.override.yml
-├── .gitignore
-└── README.md
+└── developer/
+    └── projects/
 ```
 
-During installation an internal folder is created:
+## Template model
 
-```
-.internal/
-  env.sh
-  install-manifest.txt
-  INFO.md
-```
+- Shared team templates live in `templates/projects/`.
+- Reusable partials live in `templates/partials/`.
+- Ruby helper methods live in `templates/helpers/workflow.rb`.
+- Developer overrides live in `developer/projects/*.override.yml`.
 
-This folder stores metadata used by the installer.
-
----
-
-# Installation
-
-Run:
-
-```bash
-bash install.sh
-```
-
-Non-interactive install:
-
-```bash
-bash install.sh --yes --repos-root "${HOME}/code"
-```
-
-Validate only (no file writes):
-
-```bash
-bash install.sh --check --repos-root "${HOME}/code"
-```
-
-The installer:
-
-- checks if **tmux** is installed
-- checks if **tmuxinator** is installed
-- installs missing dependencies when possible
-- asks for your `REPOSITORIES_ROOT`
-- keeps workflows in `templates/projects/` as the source of truth
-- creates symlinks in `~/.config/tmuxinator` that point to templates
-- prepares `developer/projects/` for personal overrides
-- exports helper env vars used by template includes
-
-```
-~/.config/tmuxinator
-```
-
----
-
-# Using REPOSITORIES_ROOT
-
-Templates should reference repositories using:
+Example project template pattern:
 
 ```yaml
-root: <%= ENV.fetch("REPOSITORIES_ROOT") %>/example-includes
-```
-
-This allows each developer to keep repositories in different local directories.
-
----
-
-# Customization model
-
-## Team workflows
-
-Team changes belong in:
-
-```
-templates/projects/
-```
-
-Reusable shared blocks belong in:
-
-```
-templates/partials/
-```
-
-Shared helper methods for concise project templates live in:
-
-```
-templates/helpers/
-```
-
-Examples:
-
-- adding services
-- changing layouts
-- shared commands
-
----
-
-## Developer customization
-
-Developers keep personal overrides in:
-
-```
-developer/projects/
-```
-
-Examples:
-
-- add personal tools/windows
-- add personal pane commands
-- tweak startup behavior
-
-If a change benefits the team, move it back into `templates/projects/` or `templates/partials/`.
-
----
-
-## Optional overrides
-
-Developers can add optional override files such as:
-
-```
-developer/projects/example-includes.override.yml
-```
-
-Then start your project:
-
-```bash
-tmuxinator start example-includes
-```
-
-Overrides are best for **adding personal tools or panes**.  
-For deeper shared changes, update files in `templates/projects/` or `templates/partials/`.
-
-For projects that use shared partials, override files can customize only what you need (for example `editor_cmd`) while keeping partial defaults for everything else:
-
-```yaml
-partials:
-  landing-frontend:
-    editor_cmd: "nvim"
-```
-
-`partials` keys map to partial filenames (for example `landing-frontend`, `cc-backend-headless-cms`, `videoland-titles`).
-
-Project templates should stay mostly YAML and use helper includes, for example:
-
-```yaml
-<% Kernel.load ENV.fetch("TEAM_WORKFLOWS_HELPER_FILE") %>
-
-pre_window: >-
-  bash -lc '<%= include_pre_window("node-nvm-use") %>'
+<%
+Kernel.load ENV.fetch("TEAM_WORKFLOWS_HELPER_FILE")
+override_data = load_project_override("my-workflow")
+%>
 
 windows:
-<%= include_window("landing-frontend", folder: "./landing-frontend", overrides: partial_override(override_data, "landing-frontend")) %>
+<%= include_window("example-app", folder: ".", overrides: partial_override(override_data, "example-app")) %>
+<%= render_extra_windows(override_data) %>
 ```
 
----
+## Troubleshooting
 
-# Updating workflows
-
-```bash
-twf update
-```
-
-The installer keeps templates as the source of truth and refreshes tmuxinator symlinks.
-
----
-
-# Runtime requirements
-
-These environment variables must be available when tmuxinator renders templates:
-
-- `REPOSITORIES_ROOT`
-- `TEAM_WORKFLOWS_REPO_DIR`
-- `TEAM_WORKFLOWS_HELPER_FILE`
-
-`install.sh` writes them to `.internal/env.sh` and can add a source block to your shell rc file.
-
----
-
-# Troubleshooting
-
-If `tmuxinator start <project>` fails with parse errors:
+Validate templates:
 
 ```bash
-source .internal/env.sh
 twf validate
 ```
 
-If symlinks look wrong:
+Environment and installation diagnostics:
+
+```bash
+twf doctor
+```
+
+Reinstall links/config:
 
 ```bash
 twf install
 ```
 
----
-
-# Creating new projects
-
-Run this in an empty directory:
+Update twf repo and re-run install:
 
 ```bash
-twf add my-workflow
+twf update
 ```
 
-`twf add` rules:
-
-- project name is required
-- `root:` is scaffolded as `.`
-- hard-fails if `~/.config/tmuxinator/my-workflow.yml` already exists
-- hard-fails when destination files already exist
-- supports `--dry-run` to preview generated files
-
----
-
-# Removing projects
-
-Remove the tmuxinator alias:
-
-```bash
-twf remove my-workflow
-```
-
-With `twf remove`, the alias is removed first, then you are prompted to optionally remove:
-
-- `developer/projects/my-workflow.override.yml`
-- `templates/projects/my-workflow.yml`
-
-Use non-interactive mode to remove all three in one command:
-
-```bash
-twf remove my-workflow --yes
-```
-
----
-
-# Uninstall
-
-```bash
-twf uninstall
-```
-
-Removes:
-
-- global CLI symlink (default `~/.local/bin/twf`)
-- install root (default `~/.local/share/twf`) when confirmed
-
-`twf uninstall` does not remove project aliases in tmuxinator. Use `twf remove <project>` for that.
-
----
-
-# Smoke test checklist
+## Smoke test checklist
 
 ```bash
 bash -n twf
@@ -441,43 +220,24 @@ bash -n scripts/bootstrap.sh
 
 Expected failure checks:
 
-- `twf add demo` fails when `~/.config/tmuxinator/demo.yml` already exists
-- `scripts/bootstrap.sh` fails when `TWF_REPO_URL` is unset (placeholder mode)
+- `twf add demo` fails when `~/.config/tmuxinator/demo.yml` already exists.
+- `twf add demo` fails when current directory is not empty with scaffold paths.
 
----
+## Uninstall
 
-# Requirements
+Remove global twf CLI install:
 
-The installer ensures:
-
-- tmux
-- tmuxinator
-
----
-
-# .gitignore
-
-```gitignore
-/developer/**
-!/developer/.gitkeep
-!/developer/projects/
-!/developer/projects/.gitkeep
-!/developer/projects/*.override.yml
-/.internal/
+```bash
+twf uninstall
 ```
 
----
+This removes:
 
-# License
+- CLI link (default: `~/.local/bin/twf`)
+- install root (default: `~/.local/share/twf`, when confirmed)
 
-MIT License
+It does **not** remove tmuxinator project aliases; use `twf remove <project>` for that.
 
----
+## License
 
-# References
-
-tmuxinator  
-https://github.com/tmuxinator/tmuxinator
-
-tmux  
-https://github.com/tmux/tmux
+MIT

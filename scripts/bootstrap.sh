@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TWF_REPO_URL="${TWF_REPO_URL:-TODO_GITHUB_REPO_URL}"
+TWF_REPO_URL="${TWF_REPO_URL:-https://github.com/R4YM3/tmuxinator-team-workflows.git}"
 TWF_INSTALL_ROOT="${TWF_INSTALL_ROOT:-$HOME/.local/share/twf}"
 TWF_BIN_DIR="${TWF_BIN_DIR:-$HOME/.local/bin}"
 
@@ -10,10 +10,10 @@ info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
 warn() { printf "\033[1;33m[warn]\033[0m %s\n" "$1"; }
 error() { printf "\033[1;31m[error]\033[0m %s\n" "$1" >&2; }
 
-if [[ "$TWF_REPO_URL" == "TODO_GITHUB_REPO_URL" ]]; then
-  error "Bootstrap repository URL is not configured yet."
+if [[ -z "$TWF_REPO_URL" ]]; then
+  error "TWF_REPO_URL is empty."
   info "Set TWF_REPO_URL and rerun, for example:"
-  echo "  TWF_REPO_URL='https://github.com/your-org/tmuxinator-team-workflows.git' bash scripts/bootstrap.sh"
+  echo "  TWF_REPO_URL='https://github.com/R4YM3/tmuxinator-team-workflows.git' bash scripts/bootstrap.sh"
   exit 1
 fi
 
