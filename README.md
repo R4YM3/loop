@@ -4,11 +4,38 @@
 
 Install `twf` once globally, then create one dedicated workflow repository (outside app repos) where you manage templates and personal overrides for all development environments.
 
+## Problem this solves
+
+Teams that use tmux/tmuxinator often hit the same issues:
+
+- Everyone starts services differently (different panes, commands, startup order).
+- New teammates need tribal knowledge to get a full session running.
+- Shared changes and personal tweaks get mixed together.
+- Project aliases in `~/.config/tmuxinator` drift across machines.
+
+`twf` solves this by keeping one workflow repository as the shared source of truth and generating/linking project aliases in a consistent way.
+
 ## Core idea
 
 - `tmuxinator` is still the runtime.
 - `twf` helps you scaffold, validate, and manage workflow projects.
 - Workflow repos are separate from application code repositories.
+
+## Why use `twf` (and why not)
+
+Use `twf` when:
+
+- You have multiple services/windows and want repeatable startup.
+- A team needs shared defaults plus personal overrides.
+- You want to version-control tmuxinator workflows as a dedicated asset.
+
+You may not need `twf` when:
+
+- You only run one simple tmux session manually.
+- You are working solo and do not need shared workflow conventions.
+- Plain `tmuxinator` files in one local repo already fit your needs.
+
+`twf` is intentionally a thin layer. It does not replace tmuxinator or hide tmux; it standardizes collaboration around them.
 
 ## Global install (CLI only)
 
@@ -171,3 +198,8 @@ Runtime internals (CLI scripts and helper plumbing) stay in `~/.local/share/twf`
 ## License
 
 MIT
+
+## References
+
+- tmux: https://github.com/tmux/tmux
+- tmuxinator: https://github.com/tmuxinator/tmuxinator
