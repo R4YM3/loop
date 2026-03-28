@@ -38,7 +38,7 @@ shopt -u nullglob
 echo "[info] Validating ${#files[@]} workflow template(s)..."
 
 for file in "${files[@]}"; do
-  if ! REPOSITORIES_ROOT="$REPOSITORIES_ROOT" TEAM_WORKFLOWS_REPO_DIR="$TEAM_WORKFLOWS_REPO_DIR" TEAM_WORKFLOWS_HELPER_FILE="$TEAM_WORKFLOWS_HELPER_FILE" ruby -rerubi -e 'file=ARGV[0]; content=File.read(file); out=eval(Erubi::Engine.new(content).src); require "yaml"; YAML.safe_load(out, aliases: true)' "$file"; then
+  if ! REPOSITORIES_ROOT="$REPOSITORIES_ROOT" TEAM_WORKFLOWS_REPO_DIR="$TEAM_WORKFLOWS_REPO_DIR" TEAM_WORKFLOWS_HELPER_FILE="$TEAM_WORKFLOWS_HELPER_FILE" ruby -rerb -e 'file=ARGV[0]; content=File.read(file); out=ERB.new(content, trim_mode: "-").result(binding); require "yaml"; YAML.safe_load(out, aliases: true)' "$file"; then
     echo "[error] Validation failed: $file" >&2
     exit 1
   fi

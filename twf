@@ -1245,10 +1245,10 @@ render_project_config_for_start() {
   local rendered_file="$5"
   local repositories_root="${REPOSITORIES_ROOT:-$workflow_repo}"
 
-  REPOSITORIES_ROOT="$repositories_root" TEAM_WORKFLOWS_REPO_DIR="$workflow_repo" TEAM_WORKFLOWS_HELPER_FILE="$helper_file" ruby -rerubi -e '
+  REPOSITORIES_ROOT="$repositories_root" TEAM_WORKFLOWS_REPO_DIR="$workflow_repo" TEAM_WORKFLOWS_HELPER_FILE="$helper_file" ruby -rerb -e '
 file = ARGV[0]
 source = File.read(file)
-rendered = eval(Erubi::Engine.new(source).src)
+rendered = ERB.new(source, trim_mode: "-").result(binding)
 require "yaml"
 YAML.safe_load(rendered, aliases: true)
 puts rendered
