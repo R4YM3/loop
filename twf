@@ -1353,7 +1353,10 @@ cmd_start() {
       exit 1
     fi
 
-    tmuxinator start -p "$rendered_config_file" "$@"
+    (
+      cd "$workflow_repo"
+      tmuxinator start -p "$rendered_config_file" "$@"
+    )
     tmuxinator_status=$?
     rm -f "$rendered_config_file"
     return "$tmuxinator_status"
