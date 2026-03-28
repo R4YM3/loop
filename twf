@@ -1211,6 +1211,9 @@ cmd_start() {
   local alias_file="$TMUXINATOR_DIR/$project_name.yml"
   local workflow_repo=""
   local local_template=""
+  local helper_file="$RUNTIME_DIR/templates/helpers/workflow.rb"
+  local helper_env=""
+  local repo_env=""
   shift
 
   if ! command -v tmuxinator >/dev/null 2>&1; then
@@ -1250,7 +1253,14 @@ cmd_start() {
     check_plugins_ready_for_project "$workflow_repo" "$project_name"
   fi
 
-  tmuxinator start "$project_name" "$@"
+  helper_env="${TEAM_WORKFLOWS_HELPER_FILE:-$helper_file}"
+  repo_env="${TEAM_WORKFLOWS_REPO_DIR:-$workflow_repo}"
+
+  if [[ -n "$repo_env" ]]; then
+    TEAM_WORKFLOWS_HELPER_FILE="$helper_env" TEAM_WORKFLOWS_REPO_DIR="$repo_env" tmuxinator start "$project_name" "$@"
+  else
+    TEAM_WORKFLOWS_HELPER_FILE="$helper_env" tmuxinator start "$project_name" "$@"
+  fi
 }
 
 cmd_uninstall() {
