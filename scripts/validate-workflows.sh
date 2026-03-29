@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RUNTIME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW_REPO_DIR="${TWF_WORKFLOW_REPO:-}"
 
 [[ -n "$WORKFLOW_REPO_DIR" ]] || {
@@ -9,40 +8,40 @@ WORKFLOW_REPO_DIR="${TWF_WORKFLOW_REPO:-}"
   exit 1
 }
 
-TEMPLATES_DIR="$WORKFLOW_REPO_DIR/templates/projects"
-HELPER_FILE="$RUNTIME_DIR/templates/helpers/workflow.rb"
-
-REPOSITORIES_ROOT="${REPOSITORIES_ROOT:-$WORKFLOW_REPO_DIR}"
-TEAM_WORKFLOWS_REPO_DIR="${TEAM_WORKFLOWS_REPO_DIR:-$WORKFLOW_REPO_DIR}"
-TEAM_WORKFLOWS_HELPER_FILE="${TEAM_WORKFLOWS_HELPER_FILE:-$HELPER_FILE}"
-
-[[ -d "$TEMPLATES_DIR" ]] || {
-  echo "[error] Missing templates directory: $TEMPLATES_DIR" >&2
-  exit 1
-}
-
-[[ -f "$TEAM_WORKFLOWS_HELPER_FILE" ]] || {
-  echo "[error] Missing helper file: $TEAM_WORKFLOWS_HELPER_FILE" >&2
+[[ -d "$WORKFLOW_REPO_DIR" ]] || {
+  echo "[error] Missing workflow root directory: $WORKFLOW_REPO_DIR" >&2
   exit 1
 }
 
 shopt -s nullglob
-files=("$TEMPLATES_DIR"/*.yml)
+project_dirs=("$WORKFLOW_REPO_DIR"/*)
 shopt -u nullglob
 
-[[ ${#files[@]} -gt 0 ]] || {
-  echo "[error] No project templates found in $TEMPLATES_DIR" >&2
+project_count=0
+for dir in "${project_dirs[@]}"; do
+  [[ -d "$dir" ]] || continue
+  [[ -f "$dir/project.yml" ]] || continue
+  project_count=$((project_count + 1))
+done
+
+[[ "$project_count" -gt 0 ]] || {
+  echo "[error] No project templates found in $WORKFLOW_REPO_DIR" >&2
   exit 1
 }
 
-echo "[info] Validating ${#files[@]} workflow template(s)..."
+echo "[info] Validating $project_count workflow project(s)..."
 
-for file in "${files[@]}"; do
-  if ! REPOSITORIES_ROOT="$REPOSITORIES_ROOT" TEAM_WORKFLOWS_REPO_DIR="$TEAM_WORKFLOWS_REPO_DIR" TEAM_WORKFLOWS_HELPER_FILE="$TEAM_WORKFLOWS_HELPER_FILE" ruby -rerb -e 'file=ARGV[0]; content=File.read(file); out=ERB.new(content, trim_mode: "-").result(binding); require "yaml"; YAML.safe_load(out, aliases: true)' "$file"; then
-    echo "[error] Validation failed: $file" >&2
+for dir in "${project_dirs[@]}"; do
+  [[ -d "$dir" ]] || continue
+  project_file="$dir/project.yml"
+  override_file="$dir/developer.yml"
+  [[ -f "$project_file" ]] || continue
+
+  if ! ruby -rerb -ryaml -e 'def load_yaml(path); rendered = ERB.new(File.read(path), trim_mode: "-").result(binding); data = YAML.safe_load(rendered, aliases: true); raise "Top-level YAML must be a map" unless data.is_a?(Hash); end; load_yaml(ARGV[0]); if File.exist?(ARGV[1]); load_yaml(ARGV[1]); end' "$project_file" "$override_file"; then
+    echo "[error] Validation failed: $project_file" >&2
     exit 1
   fi
-  echo "[ok] $file"
+  echo "[ok] $project_file"
 done
 
 echo "[ok] All workflow templates are valid"

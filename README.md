@@ -53,41 +53,37 @@ Optional bootstrap overrides:
 curl -fsSL "https://raw.githubusercontent.com/R4YM3/tmuxinator-team-workflows/main/scripts/bootstrap.sh" | TWF_REPO_URL="https://github.com/R4YM3/tmuxinator-team-workflows.git" TWF_INSTALL_ROOT="$HOME/.local/share/twf" TWF_BIN_DIR="$HOME/.local/bin" bash && exec "$SHELL" -l
 ```
 
-Bootstrap does **not** create a workflow repo.
+## Add your first project
 
-## Create a workflow repo
-
-Create an empty directory dedicated to workflows and add your first project:
+Run `twf add` from your project directory:
 
 ```bash
-mkdir -p "$HOME/code/team-workflows"
-cd "$HOME/code/team-workflows"
-twf add my-workflow
+cd /path/to/project-a
+twf add
 ```
 
-Optional: scaffold with demo content:
+On first run, `twf` asks where your team workflow root should live (default: `../team-workflows`) and saves it in `~/.config/twf/config.yml`.
 
-```bash
-twf add my-workflow --with-demo
-```
+Then it creates:
 
-This creates a workflow repo in the current directory with:
-
-- `README.md`
-- `.gitignore`
-- `templates/`
-- `developer/`
-
-Then it adds project files for `my-workflow` and creates a tmuxinator alias symlink.
-
-Important: do not run `twf add` inside an application repository.
+- `<team-workflows-root>/project-a/project.yml`
+- `<team-workflows-root>/project-a/developer.yml`
+- tmuxinator alias: `${XDG_CONFIG_HOME:-$HOME/.config}/tmuxinator/project-a.yml`
+- local edit link in your repo: `.twf/workflows/project-a`
 
 ## Add more projects
 
-Inside an existing workflow repo:
+From any codebase directory:
 
 ```bash
-twf add project-two
+cd /path/to/project-b
+twf add
+```
+
+Or explicit name:
+
+```bash
+twf add project-b
 ```
 
 If a tmuxinator alias already exists, `twf add` prompts:
@@ -96,7 +92,6 @@ If a tmuxinator alias already exists, `twf add` prompts:
 - replace the existing alias (with confirmation)
 
 With `--dry-run`, rename/replace is still prompted, but no files are written and no replacement confirmation is asked.
-With `--with-demo`, the new project uses demo template/override content instead of the minimal starter.
 
 ## Plugins per project
 
@@ -144,7 +139,7 @@ Notes:
 
 Run `twf help` for the latest command text.
 
-- `twf add <project-name> [--dry-run] [--with-demo]`
+- `twf add [project-name] [--dry-run]`
 - `twf remove <project-name> [--yes]`
 - `twf plugin add <plugin> --project <project>`
 - `twf plugin remove <plugin> --project <project>`
@@ -176,7 +171,7 @@ tmuxinator start my-workflow
 
 ## Validate and diagnose
 
-Run from inside your workflow repo:
+Run from anywhere after your team workflow root is configured:
 
 ```bash
 twf validate
@@ -197,14 +192,10 @@ Non-interactive:
 twf remove my-workflow --yes
 ```
 
-`twf remove` always removes:
+`twf remove` removes:
 
 - `${XDG_CONFIG_HOME:-$HOME/.config}/tmuxinator/<project>.yml`
-
-Then it optionally removes (if present in current workflow repo):
-
-- `templates/projects/<project>.yml`
-- `developer/projects/<project>.override.yml`
+- `<team-workflows-root>/<project>/` (with confirmation, or immediately with `--yes`)
 
 ## Uninstall CLI
 
@@ -223,27 +214,26 @@ It does not remove tmuxinator aliases or workflow repositories.
 
 ## Workflow repo layout
 
-Only workflow content should be visible in your repo:
+Workflow content is stored per project in your team workflow root:
 
 ```text
-.
+<team-workflows-root>/
 ├── README.md
-├── .gitignore
-├── templates/
-│   ├── partials/
-│   └── projects/
-└── developer/
-    └── projects/
+├── project-a/
+│   ├── project.yml
+│   └── developer.yml
+└── project-b/
+    ├── project.yml
+    └── developer.yml
 ```
 
 Runtime internals (CLI scripts, helper plumbing, and plugin implementations) stay in `~/.local/share/twf`.
 
 ## Notes on customization
 
-- Day-to-day customization should happen in:
-  - `templates/projects/`
-  - `templates/partials/`
-  - `developer/projects/*.override.yml`
+- Day-to-day customization should happen in each project folder:
+  - `<team-workflows-root>/<project>/project.yml`
+  - `<team-workflows-root>/<project>/developer.yml`
 - Avoid editing runtime internals in `~/.local/share/twf` unless you are maintaining the framework itself.
 
 ## Requirements

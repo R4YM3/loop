@@ -5,8 +5,6 @@ RUNTIME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW_REPO_DIR="${TWF_WORKFLOW_REPO:-}"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 TMUXINATOR_DIR="$CONFIG_HOME/tmuxinator"
-TEMPLATES_DIR="$WORKFLOW_REPO_DIR/templates/projects"
-DEVELOPER_DIR="$WORKFLOW_REPO_DIR/developer/projects"
 
 ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
 warn() { printf "\033[1;33m[warn]\033[0m %s\n" "$1"; }
@@ -20,17 +18,10 @@ error() { printf "\033[1;31m[error]\033[0m %s\n" "$1"; }
 command -v tmux >/dev/null 2>&1 && ok "tmux found" || error "tmux not found"
 command -v tmuxinator >/dev/null 2>&1 && ok "tmuxinator found" || error "tmuxinator not found"
 
-if [[ -d "$TEMPLATES_DIR" ]]; then
-  ok "Workflow templates dir exists: $TEMPLATES_DIR"
+if [[ -d "$WORKFLOW_REPO_DIR" ]]; then
+  ok "Workflow root dir exists: $WORKFLOW_REPO_DIR"
 else
-  error "Workflow templates dir missing: $TEMPLATES_DIR"
-  exit 1
-fi
-
-if [[ -d "$DEVELOPER_DIR" ]]; then
-  ok "Developer overrides dir exists: $DEVELOPER_DIR"
-else
-  error "Developer overrides dir missing: $DEVELOPER_DIR"
+  error "Workflow root dir missing: $WORKFLOW_REPO_DIR"
   exit 1
 fi
 
@@ -41,18 +32,25 @@ else
 fi
 
 shopt -s nullglob
-project_files=("$TEMPLATES_DIR"/*.yml)
+project_dirs=("$WORKFLOW_REPO_DIR"/*)
 shopt -u nullglob
 
+project_files=()
+for dir in "${project_dirs[@]}"; do
+  [[ -d "$dir" ]] || continue
+  [[ -f "$dir/project.yml" ]] || continue
+  project_files+=("$dir/project.yml")
+done
+
 if [[ ${#project_files[@]} -eq 0 ]]; then
-  warn "No workflow project templates found in $TEMPLATES_DIR"
+  warn "No workflow project templates found in $WORKFLOW_REPO_DIR"
 else
   ok "Found ${#project_files[@]} project template(s)"
 fi
 
 project_file=""
 for project_file in "${project_files[@]}"; do
-  project_name="$(basename "${project_file%.yml}")"
+  project_name="$(basename "$(dirname "$project_file")")"
   alias_file="$TMUXINATOR_DIR/$project_name.yml"
 
   if [[ ! -e "$alias_file" ]]; then
