@@ -115,6 +115,9 @@ else
   git clone "$TWF_REPO_URL" "$TWF_INSTALL_ROOT"
 fi
 
+info "Ensuring latest runtime revision"
+git -C "$TWF_INSTALL_ROOT" pull --ff-only
+
 mkdir -p "$TWF_BIN_DIR"
 ln -sfn "$TWF_INSTALL_ROOT/twf" "$TWF_BIN_DIR/twf"
 chmod +x "$TWF_INSTALL_ROOT/twf"
