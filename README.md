@@ -2,7 +2,7 @@
 
 `twf` is a lightweight workflow layer on top of tmuxinator.
 
-Install `twf` once globally, then create one dedicated workflow repository (outside app repos) to manage templates and personal overrides for all development environments.
+Install `twf` once globally, then configure one team workflow root (outside app repos) to manage per-project workflow files for all development environments.
 
 ## Problem this solves
 
@@ -13,13 +13,13 @@ Teams that use tmux/tmuxinator often hit the same issues:
 - Shared changes and personal tweaks get mixed together.
 - Project aliases in `~/.config/tmuxinator` drift across machines.
 
-`twf` solves this by using one workflow repository as the shared source of truth and creating project aliases consistently.
+`twf` solves this by using one team workflow root as the shared source of truth and creating project aliases consistently.
 
 ## Core idea
 
 - `tmuxinator` is still the runtime.
 - `twf` helps you scaffold, validate, and manage workflow projects.
-- Workflow repos are separate from application code repositories.
+- Workflow files are stored in a dedicated team workflow root, separate from application code repositories.
 
 ## Why use `twf` (and why not)
 
@@ -111,7 +111,7 @@ Install configured plugins for one project:
 twf plugin install --project my-workflow
 ```
 
-Install configured plugins for all projects in this workflow repo:
+Install configured plugins for all projects in the team workflow root:
 
 ```bash
 twf plugin install --global
@@ -211,7 +211,7 @@ This removes:
 - `~/.local/bin/twf`
 - `~/.local/share/twf` (when confirmed, or with `--yes`)
 
-It does not remove tmuxinator aliases or workflow repositories.
+It does not remove team workflow projects or tmuxinator aliases.
 
 ## Workflow repo layout
 
