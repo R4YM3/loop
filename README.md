@@ -72,7 +72,9 @@ Then it creates:
 - `<team-workflows-root>/project-a/project.yml`
 - `<team-workflows-root>/project-a/developer.yml`
 - tmuxinator alias: `${XDG_CONFIG_HOME:-$HOME/.config}/tmuxinator/project-a.yml`
-- local edit link in your repo: `.twf/workflows/project-a`
+- local edit links in your repo:
+  - `.twf/project.yml`
+  - `.twf/developer.yml`
 
 ## Add more projects
 

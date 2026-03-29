@@ -1,5 +1,5 @@
 name: videoland-landing
-root: <%= ENV.fetch("VIDEOLAND_ROOT", "#{ENV.fetch("REPOSITORIES_ROOT", "#{ENV["HOME"]}/Development/rtl")}/landing-videoland") %>
+root: <%= ENV.fetch("VIDEOLAND_ROOT", "#{ENV.fetch("REPOSITORIES_ROOT", "#{ENV["HOME"]}/Development/rtl")}/videoland-landing") %>
 
 startup_window: frontend
 startup_pane: 1
