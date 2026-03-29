@@ -2,6 +2,8 @@
 
 `twf` is a lightweight workflow layer on top of tmuxinator.
 
+Start your entire dev workflow with one command — together as a team.
+
 Install `twf` once globally, then configure one team workflow root (outside app repos) to manage per-project workflow files for all development environments.
 
 ## Problem this solves
