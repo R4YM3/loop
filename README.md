@@ -117,6 +117,8 @@ twf service install
 twf start
 ```
 
+If you run `twf add` in a folder with multiple direct child repositories, `twf` detects a multi-repo workspace and can create one workspace workflow automatically.
+
 ## 🧠 Smart detection
 
 `twf` understands your project and suggests services automatically.

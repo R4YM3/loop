@@ -797,6 +797,105 @@ windows:
 EOF
 }
 
+is_codebase_directory() {
+  local dir="$1"
+
+  [[ -d "$dir" ]] || return 1
+  [[ -e "$dir/.git" ]] && return 0
+
+  local markers=(
+    "package.json"
+    "pyproject.toml"
+    "requirements.txt"
+    "go.mod"
+    "Cargo.toml"
+    "composer.json"
+    "Gemfile"
+    "pom.xml"
+    "build.gradle"
+    "build.gradle.kts"
+    "*.sln"
+    "*.csproj"
+    "Dockerfile"
+    "docker-compose.yml"
+    "docker-compose.yaml"
+  )
+
+  local marker
+  for marker in "${markers[@]}"; do
+    if compgen -G "$dir/$marker" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+detect_workspace_repos() {
+  local root="$1"
+  local children=()
+  local child
+
+  shopt -s nullglob
+  children=("$root"/*)
+  shopt -u nullglob
+
+  for child in "${children[@]}"; do
+    [[ -d "$child" ]] || continue
+    is_codebase_directory "$child" || continue
+    echo "$child"
+  done
+}
+
+window_name_from_repo_path() {
+  local path="$1"
+  local name
+  name="$(basename "$path")"
+  name="${name// /-}"
+  name="${name//_/-}"
+  echo "$name"
+}
+
+render_workspace_project_template() {
+  local project_name="$1"
+  local source_root="$2"
+  shift 2
+  local repo_paths=("$@")
+
+  cat <<EOF
+name: $project_name
+root: "$source_root"
+
+startup_window: $(window_name_from_repo_path "${repo_paths[0]}")
+
+windows:
+EOF
+
+  local repo_path
+  local repo_name
+  local repo_dir_name
+  for repo_path in "${repo_paths[@]}"; do
+    repo_dir_name="$(basename "$repo_path")"
+    repo_name="$(window_name_from_repo_path "$repo_path")"
+    cat <<EOF
+  - $repo_name:
+      root: ./${repo_dir_name}
+      layout: main-vertical
+      panes:
+        - editor: 'nvim'
+        - shell: 'zsh -l'
+
+EOF
+  done
+
+  cat <<'EOF'
+  - twf:
+      root: ./.twf
+      panes:
+        - 'nvim || zsh -l'
+EOF
+}
+
 scaffold_workflow_repo() {
   local repo="$1"
 
@@ -1022,6 +1121,41 @@ EOF
   local scaffold_repo=false
   local source_root
   source_root="$(cd "$PWD" && pwd)"
+  local add_mode="single"
+  local workspace_repos=()
+
+  if ! is_codebase_directory "$source_root"; then
+    local candidate=""
+    while IFS= read -r candidate; do
+      [[ -n "$candidate" ]] || continue
+      workspace_repos+=("$candidate")
+    done < <(detect_workspace_repos "$source_root")
+
+    if [[ ${#workspace_repos[@]} -ge 2 ]]; then
+      add_mode="workspace"
+    fi
+  fi
+
+  if [[ "$add_mode" == "workspace" && ${#workspace_repos[@]} -eq 0 ]]; then
+    local candidate=""
+    while IFS= read -r candidate; do
+      [[ -n "$candidate" ]] || continue
+      workspace_repos+=("$candidate")
+    done < <(detect_workspace_repos "$source_root")
+  fi
+
+  if [[ "$add_mode" == "workspace" && ${#workspace_repos[@]} -lt 2 ]]; then
+    warn "Workspace mode selected, but fewer than 2 child codebases detected; continuing as single project"
+    add_mode="single"
+  fi
+
+  if [[ "$add_mode" == "workspace" && -t 0 && "$dry_run" != true ]]; then
+    info "Detected multi-repo workspace with ${#workspace_repos[@]} repositories"
+    if ! confirm_remove "Create one workspace workflow for this directory?"; then
+      info "Continuing with single-project add mode"
+      add_mode="single"
+    fi
+  fi
 
   workflow_repo="$(ensure_workflow_root_for_add "$dry_run")"
   if [[ ! -f "$workflow_repo/README.md" ]]; then
@@ -1055,10 +1189,27 @@ EOF
   project_file="$project_root_dir/project.yml"
   local suggested_services=()
   local suggested_service=""
-  while IFS= read -r suggested_service; do
-    [[ -n "$suggested_service" ]] || continue
-    suggested_services+=("$suggested_service")
-  done < <(detect_suggested_services "$source_root")
+  local seen_services=","
+  if [[ "$add_mode" == "workspace" ]]; then
+    local repo_path
+    for repo_path in "${workspace_repos[@]}"; do
+      while IFS= read -r suggested_service; do
+        [[ -n "$suggested_service" ]] || continue
+        if [[ "$seen_services" != *",$suggested_service,"* ]]; then
+          suggested_services+=("$suggested_service")
+          seen_services+="$suggested_service,"
+        fi
+      done < <(detect_suggested_services "$repo_path")
+    done
+  else
+    while IFS= read -r suggested_service; do
+      [[ -n "$suggested_service" ]] || continue
+      if [[ "$seen_services" != *",$suggested_service,"* ]]; then
+        suggested_services+=("$suggested_service")
+        seen_services+="$suggested_service,"
+      fi
+    done < <(detect_suggested_services "$source_root")
+  fi
 
   if [[ "$dry_run" == true ]]; then
     info "Dry run: no files were written"
@@ -1070,10 +1221,20 @@ EOF
     echo "Would create project files:"
     echo "  $project_file"
     echo "  $override_file"
+    if [[ "$add_mode" == "workspace" ]]; then
+      echo "Mode: workspace"
+      echo "Would include repositories:"
+      local repo_path
+      for repo_path in "${workspace_repos[@]}"; do
+        echo "  - $(basename "$repo_path")"
+      done
+    fi
     if [[ ${#suggested_services[@]} -gt 0 ]]; then
       echo "Would auto-enable suggested services: ${suggested_services[*]}"
     fi
-    echo "Mode: minimal project content"
+    if [[ "$add_mode" == "single" ]]; then
+      echo "Mode: minimal project content"
+    fi
 
     case "$alias_mode" in
     create)
@@ -1096,7 +1257,11 @@ EOF
   fi
 
   mkdir -p "$project_root_dir"
-  render_project_template "$final_name" "$source_root" >"$project_file"
+  if [[ "$add_mode" == "workspace" ]]; then
+    render_workspace_project_template "$final_name" "$source_root" "${workspace_repos[@]}" >"$project_file"
+  else
+    render_project_template "$final_name" "$source_root" >"$project_file"
+  fi
 
   {
     cat <<'EOF'
