@@ -38,7 +38,7 @@ Commands:
   doctor                       Run environment diagnostics
   update                       Pull latest twf runtime repo
   list                         List projects and installed aliases
-  start <project> [args...]    Start a project workflow
+  start <project> [args...]    Start a project workflow (supports --strict)
   stop <project>               Stop a running project workflow
   uninstall [--yes]            Remove global twf CLI installation
   version                      Print twf version
@@ -930,6 +930,32 @@ check_services_ready_for_project() {
   done
 }
 
+report_service_readiness_for_start() {
+  local repo="$1"
+  local project_name="$2"
+  local service=""
+
+  START_MISSING_SERVICES=()
+  load_enabled_services_for_project "$repo" "$project_name"
+
+  if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
+    echo "  - (no services configured)"
+    return 0
+  fi
+
+  for service in "${LOADED_PROJECT_SERVICES[@]}"; do
+    require_service "$service"
+    build_service_state_context "$repo" "$project_name" "$service"
+
+    if service_state_matches "$project_name" "$service" "$SERVICE_CTX_VERSION" "$SERVICE_CTX_CONFIG_HASH"; then
+      printf '✔ %s -> ready\n' "$service"
+    else
+      printf '⚠ %s -> not installed\n' "$service"
+      START_MISSING_SERVICES+=("$service")
+    fi
+  done
+}
+
 parse_service_project_args() {
   local usage="$1"
   shift
@@ -1531,11 +1557,13 @@ infer_start_project_from_context() {
 
 cmd_start() {
   local project_name=""
+  local strict_mode=false
+  local start_args=()
 
   if [[ $# -eq 0 || "${1:-}" == -* ]]; then
     if [[ "${1:-}" == "--project" ]]; then
       error "Invalid option for twf start: --project"
-      info "Usage: twf start <project-name> [tmuxinator args...]"
+      info "Usage: twf start <project-name> [tmuxinator args...] [--strict]"
       info "Tip: use 'twf start test-repo' or run from that repo and use 'twf start'"
       exit 1
     fi
@@ -1543,7 +1571,7 @@ cmd_start() {
     project_name="$(infer_start_project_from_context)"
     if [[ -z "$project_name" ]]; then
       error "Missing project name and could not infer one from current directory"
-      info "Usage: twf start <project-name> [tmuxinator args...]"
+      info "Usage: twf start <project-name> [tmuxinator args...] [--strict]"
       info "Tip: run from your project repo and use 'twf start', or pass project explicitly"
       exit 1
     fi
@@ -1554,6 +1582,18 @@ cmd_start() {
     shift
   fi
 
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+    --strict)
+      strict_mode=true
+      ;;
+    *)
+      start_args+=("$arg")
+      ;;
+    esac
+  done
+
   local alias_file="$TMUXINATOR_DIR/$project_name.yml"
   local current_repo=""
   local workflow_repo=""
@@ -1563,6 +1603,8 @@ cmd_start() {
   local tmuxinator_status=0
   local had_session_before=false
   local has_managed_project=false
+
+  echo "[twf] Project: $project_name"
 
   if tmux has-session -t "$project_name" 2>/dev/null; then
     had_session_before=true
@@ -1608,7 +1650,19 @@ cmd_start() {
   fi
 
   if [[ "$has_managed_project" == true ]]; then
-    check_services_ready_for_project "$workflow_repo" "$project_name"
+    echo "[twf] Loading services..."
+    echo "[twf] Applying developer overrides..."
+    echo "[twf] Checking dependencies..."
+    report_service_readiness_for_start "$workflow_repo" "$project_name"
+
+    if [[ ${#START_MISSING_SERVICES[@]} -gt 0 ]]; then
+      echo
+      echo "[twf] Run: twf service install --project $project_name"
+      if [[ "$strict_mode" == true ]]; then
+        error "Missing required services for '$project_name' (strict mode enabled)"
+        return 1
+      fi
+    fi
   fi
 
   if [[ "$has_managed_project" == true ]]; then
@@ -1629,37 +1683,45 @@ cmd_start() {
     fi
 
     sanitize_tmux_env
+    echo "[twf] Starting workflow..."
     set +e
     (
       cd "$workflow_repo"
-      tmuxinator start -p "$rendered_config_file" "$@"
+      tmuxinator start -p "$rendered_config_file" "${start_args[@]}"
     )
     tmuxinator_status=$?
     set -e
     rm -f "$rendered_config_file"
     if [[ "$tmuxinator_status" -ne 0 ]] && [[ "$had_session_before" == false ]] && tmux has-session -t "$project_name" 2>/dev/null; then
-      if start_requested_no_attach "$@"; then
+      if start_requested_no_attach "${start_args[@]}"; then
         return 0
       fi
       warn "Workflow session '$project_name' started, but auto-attach failed"
       info "Attach manually: tmux attach-session -t $project_name"
       return 0
     fi
+    if [[ "$tmuxinator_status" -eq 0 ]]; then
+      echo "✔ Session started"
+    fi
     return "$tmuxinator_status"
   fi
 
   sanitize_tmux_env
+  echo "[twf] Starting workflow..."
   set +e
-  tmuxinator start "$project_name" "$@"
+  tmuxinator start "$project_name" "${start_args[@]}"
   tmuxinator_status=$?
   set -e
   if [[ "$tmuxinator_status" -ne 0 ]] && [[ "$had_session_before" == false ]] && tmux has-session -t "$project_name" 2>/dev/null; then
-    if start_requested_no_attach "$@"; then
+    if start_requested_no_attach "${start_args[@]}"; then
       return 0
     fi
     warn "Workflow session '$project_name' started, but auto-attach failed"
     info "Attach manually: tmux attach-session -t $project_name"
     return 0
+  fi
+  if [[ "$tmuxinator_status" -eq 0 ]]; then
+    echo "✔ Session started"
   fi
   return "$tmuxinator_status"
 }
