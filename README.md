@@ -103,10 +103,10 @@ Create your first workflow:
 
 ```bash
 twf add
-twf service add web --project my-project
-twf service add api --project my-project
-twf service install --project my-project
-twf start my-project
+twf service add web
+twf service add api
+twf service install
+twf start
 ```
 
 ---
@@ -139,10 +139,10 @@ twf start twf-demo
 Reuse services across projects:
 
 ```bash
-twf service add web --project my-project
-twf service add api --project my-project
-twf service add worker --project my-project
-twf service add redis --project my-project
+twf service add web
+twf service add api
+twf service add worker
+twf service add redis
 ```
 
 👉 Define once, reuse everywhere.

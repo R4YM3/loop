@@ -1298,6 +1298,9 @@ EOF
     fi
   fi
 
+  echo "[twf doctor] Running diagnostics"
+  echo
+
   local tmux_ok=false
   local tmuxinator_ok=false
   local ruby_ok=false
@@ -1306,17 +1309,17 @@ EOF
   command -v tmuxinator >/dev/null 2>&1 && tmuxinator_ok=true
   command -v ruby >/dev/null 2>&1 && ruby_ok=true
 
-  [[ "$tmux_ok" == true ]] && echo "✔ tmux installed" || echo "⚠ tmux missing"
-  [[ "$tmuxinator_ok" == true ]] && echo "✔ tmuxinator installed" || echo "⚠ tmuxinator missing"
-  [[ "$ruby_ok" == true ]] && echo "✔ ruby installed" || echo "⚠ ruby missing"
+  echo "[twf doctor] Runtime"
+  [[ "$tmux_ok" == true ]] && echo "✔ tmux -> installed" || echo "⚠ tmux -> missing"
+  [[ "$tmuxinator_ok" == true ]] && echo "✔ tmuxinator -> installed" || echo "⚠ tmuxinator -> missing"
+  [[ "$ruby_ok" == true ]] && echo "✔ ruby -> installed" || echo "⚠ ruby -> missing"
   echo
 
   local projects=()
   local proj=""
 
   if [[ -z "$workflow_repo" ]]; then
-    echo
-    warn "No team workflow root configured; skipping project-level checks"
+    warn "No team workflow root configured; skipping project diagnostics"
     return 0
   fi
 
@@ -1337,9 +1340,11 @@ EOF
   local fix_candidates=()
   local any_issue=false
   local project
+
+  echo "[twf doctor] Projects"
   for project in "${projects[@]}"; do
     ensure_project_exists "$workflow_repo" "$project"
-    echo "[$project]"
+    echo "- $project"
 
     load_enabled_services_for_project "$workflow_repo" "$project"
     if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
@@ -1361,15 +1366,15 @@ EOF
       set -e
 
       if [[ "$check_rc" -eq 0 ]]; then
-        echo "✔ $service ready"
+        echo "  ✔ $service -> ready"
       elif [[ "$check_rc" -eq 124 ]]; then
         any_issue=true
         project_needs_fix=true
-        echo "⚠ $service check timed out (${SERVICE_CHECK_TIMEOUT_SEC}s)"
+        echo "  ⚠ $service -> check timed out (${SERVICE_CHECK_TIMEOUT_SEC}s)"
       else
         any_issue=true
         project_needs_fix=true
-        echo "⚠ $service missing or not ready"
+        echo "  ⚠ $service -> missing or not ready"
       fi
     done
 
@@ -1381,7 +1386,7 @@ EOF
   done
 
   if [[ "$any_issue" == true ]]; then
-    echo "Fix suggestions:"
+    echo "[twf doctor] Fix suggestions"
     local seen=""
     local p
     for p in "${fix_candidates[@]}"; do
@@ -1392,7 +1397,7 @@ EOF
     done
     echo "- twf doctor --project <project>"
   else
-    ok "All checked services are ready"
+    echo "[twf doctor] ✔ All checked services are ready"
   fi
 
   if [[ "$fix_mode" == true && ${#fix_candidates[@]} -gt 0 ]]; then
