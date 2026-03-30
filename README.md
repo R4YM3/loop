@@ -178,6 +178,9 @@ Use `twf` when:
 
 ## ⚙️ Commands
 
+Most commands infer the current project when you run them inside a linked repo (`.twf/project.yml`).
+Use `--project <name>` only when targeting another project.
+
 ### Projects
 
 * `twf add`
@@ -200,7 +203,7 @@ Use `twf` when:
 
 * `twf demo`
 * `twf validate`
-* `twf doctor`
+* `twf doctor` (`--project`, `--global`, `--fix`)
 * `twf list`
 * `twf update`
 * `twf uninstall`

@@ -16,6 +16,7 @@ TWF_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/twf"
 TWF_CONFIG_FILE="$TWF_CONFIG_DIR/config.yml"
 SERVICES_DIR="$RUNTIME_DIR/services"
 SERVICE_STATE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/twf/state/services"
+SERVICE_CHECK_TIMEOUT_SEC="${TWF_SERVICE_CHECK_TIMEOUT_SEC:-1.5}"
 
 ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
 info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
@@ -172,9 +173,38 @@ detect_workflow_repo() {
   configured="$(read_configured_workflow_root)"
   if [[ -n "$configured" && -d "$configured" ]]; then
     echo "$configured"
-  else
-    echo ""
+    return 0
   fi
+
+  local linked_project
+  linked_project="$(infer_project_from_local_link)"
+  if [[ -n "$linked_project" ]]; then
+    local local_link="$PWD/.twf/project.yml"
+    local resolved
+    resolved="$(python3 - "$local_link" <<'PY'
+import os
+import sys
+print(os.path.realpath(sys.argv[1]))
+PY
+    )"
+    local repo
+    repo="$(dirname "$(dirname "$resolved")")"
+    if [[ -d "$repo" ]]; then
+      echo "$repo"
+      return 0
+    fi
+  fi
+
+  local cwd_name
+  cwd_name="$(basename "$PWD")"
+  local alias_repo
+  alias_repo="$(workflow_repo_from_alias "$cwd_name")"
+  if [[ -n "$alias_repo" && -d "$alias_repo" ]]; then
+    echo "$alias_repo"
+    return 0
+  fi
+
+  echo ""
 }
 
 require_workflow_repo() {
@@ -906,36 +936,14 @@ run_service_install_for_project() {
   done
 }
 
-check_services_ready_for_project() {
-  local repo="$1"
-  local project_name="$2"
-  local service=""
-
-  ensure_project_exists "$repo" "$project_name"
-  load_enabled_services_for_project "$repo" "$project_name"
-
-  if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
-    return 0
-  fi
-
-  for service in "${LOADED_PROJECT_SERVICES[@]}"; do
-    require_service "$service"
-    build_service_state_context "$repo" "$project_name" "$service"
-
-    if ! service_state_matches "$project_name" "$service" "$SERVICE_CTX_VERSION" "$SERVICE_CTX_CONFIG_HASH"; then
-      error "Service '$service' is not installed or is out of date for project '$project_name'"
-      info "Run: twf service install --project $project_name"
-      exit 1
-    fi
-  done
-}
-
 report_service_readiness_for_start() {
   local repo="$1"
   local project_name="$2"
   local service=""
 
   START_MISSING_SERVICES=()
+  START_TIMEOUT_SERVICES=()
+  START_FAILED_SERVICES=()
   load_enabled_services_for_project "$repo" "$project_name"
 
   if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
@@ -947,8 +955,31 @@ report_service_readiness_for_start() {
     require_service "$service"
     build_service_state_context "$repo" "$project_name" "$service"
 
+    local state_ready=false
     if service_state_matches "$project_name" "$service" "$SERVICE_CTX_VERSION" "$SERVICE_CTX_CONFIG_HASH"; then
+      state_ready=true
+    fi
+
+    local check_rc=0
+    set +e
+    run_service_check_with_timeout "$SERVICE_CTX_SCRIPT" "$SERVICE_CTX_CONFIG_JSON" "$SERVICE_CHECK_TIMEOUT_SEC"
+    check_rc=$?
+    set -e
+
+    if [[ "$check_rc" -eq 0 ]]; then
       printf '✔ %s -> ready\n' "$service"
+      continue
+    fi
+
+    if [[ "$check_rc" -eq 124 ]]; then
+      printf '⚠ %s -> check timed out (%.1fs)\n' "$service" "$SERVICE_CHECK_TIMEOUT_SEC"
+      START_TIMEOUT_SERVICES+=("$service")
+      continue
+    fi
+
+    if [[ "$state_ready" == true ]]; then
+      printf '⚠ %s -> check failed\n' "$service"
+      START_FAILED_SERVICES+=("$service")
     else
       printf '⚠ %s -> not installed\n' "$service"
       START_MISSING_SERVICES+=("$service")
@@ -990,9 +1021,17 @@ parse_service_project_args() {
     info "$usage"
     exit 1
   }
+  if [[ -z "$PARSED_PROJECT_NAME" ]]; then
+    PARSED_PROJECT_NAME="$(infer_start_project_from_context)"
+    if [[ -n "$PARSED_PROJECT_NAME" ]]; then
+      info "No --project provided; inferred '$PARSED_PROJECT_NAME'"
+    fi
+  fi
+
   [[ -n "$PARSED_PROJECT_NAME" ]] || {
-    error "Missing --project"
+    error "Missing project context"
     info "$usage"
+    info "Tip: run from a linked project repo or pass --project <name>"
     exit 1
   }
 }
@@ -1041,10 +1080,17 @@ parse_service_scope_args() {
     error "Use either --project or --global, not both"
     exit 1
   fi
+
+  if [[ -z "$PARSED_PROJECT_NAME" && "$PARSED_GLOBAL" != true ]]; then
+    PARSED_PROJECT_NAME="$(infer_start_project_from_context)"
+    if [[ -n "$PARSED_PROJECT_NAME" ]]; then
+      info "No --project provided; inferred '$PARSED_PROJECT_NAME'"
+    fi
+  fi
 }
 
 cmd_service_add() {
-  parse_service_project_args "Usage: twf service add <service> --project <project>" "$@"
+  parse_service_project_args "Usage: twf service add <service> [--project <project>]" "$@"
   validate_project_name "$PARSED_PROJECT_NAME"
   require_service "$PARSED_SERVICE_NAME"
 
@@ -1058,7 +1104,7 @@ cmd_service_add() {
 }
 
 cmd_service_remove() {
-  parse_service_project_args "Usage: twf service remove <service> --project <project>" "$@"
+  parse_service_project_args "Usage: twf service remove <service> [--project <project>]" "$@"
   validate_project_name "$PARSED_PROJECT_NAME"
 
   local repo
@@ -1123,10 +1169,10 @@ cmd_service_list() {
 }
 
 cmd_service_install() {
-  parse_service_scope_args "Usage: twf service install --project <project> [--yes] | --global [--yes]" true "$@"
+  parse_service_scope_args "Usage: twf service install [--project <project>] [--yes] | --global [--yes]" true "$@"
 
   if [[ -z "$PARSED_PROJECT_NAME" && "$PARSED_GLOBAL" != true ]]; then
-    error "Missing scope: use --project <name> or --global"
+    error "Missing scope: use --project <name>, --global, or run from a linked project repo"
     exit 1
   fi
 
@@ -1151,10 +1197,10 @@ cmd_service_help() {
 Usage: twf service <command> [options]
 
 Commands:
-  add <service> --project <project>
-  remove <service> --project <project>
+  add <service> [--project <project>]
+  remove <service> [--project <project>]
   list [--project <project> | --global]
-  install --project <project> [--yes]
+  install [--project <project>] [--yes]
   install --global [--yes]
 EOF
 }
@@ -1194,9 +1240,181 @@ cmd_validate() {
 }
 
 cmd_doctor() {
+  local project_name=""
+  local global_mode=false
+  local fix_mode=false
+  local assume_yes=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --project)
+      [[ $# -ge 2 ]] || {
+        error "--project requires a project name"
+        exit 1
+      }
+      project_name="$2"
+      shift 2
+      ;;
+    --global)
+      global_mode=true
+      shift
+      ;;
+    --fix)
+      fix_mode=true
+      shift
+      ;;
+    --yes)
+      assume_yes=true
+      shift
+      ;;
+    -h | --help)
+      cat <<'EOF'
+Usage: twf doctor [--project <project> | --global] [--fix] [--yes]
+
+Diagnoses runtime and service readiness.
+Use --fix to run safe automatic service installs.
+EOF
+      return 0
+      ;;
+    *)
+      error "Unexpected argument: $1"
+      exit 1
+      ;;
+    esac
+  done
+
+  if [[ -n "$project_name" && "$global_mode" == true ]]; then
+    error "Use either --project or --global, not both"
+    exit 1
+  fi
+
   local workflow_repo
-  workflow_repo="$(require_workflow_repo)"
-  TWF_WORKFLOW_REPO="$workflow_repo" bash "$RUNTIME_DIR/scripts/doctor.sh"
+  workflow_repo="$(detect_workflow_repo)"
+
+  if [[ -z "$project_name" && "$global_mode" != true ]]; then
+    project_name="$(infer_start_project_from_context)"
+    if [[ -n "$project_name" ]]; then
+      info "No --project provided; inferred '$project_name'"
+    fi
+  fi
+
+  local tmux_ok=false
+  local tmuxinator_ok=false
+  local ruby_ok=false
+
+  command -v tmux >/dev/null 2>&1 && tmux_ok=true
+  command -v tmuxinator >/dev/null 2>&1 && tmuxinator_ok=true
+  command -v ruby >/dev/null 2>&1 && ruby_ok=true
+
+  [[ "$tmux_ok" == true ]] && echo "✔ tmux installed" || echo "⚠ tmux missing"
+  [[ "$tmuxinator_ok" == true ]] && echo "✔ tmuxinator installed" || echo "⚠ tmuxinator missing"
+  [[ "$ruby_ok" == true ]] && echo "✔ ruby installed" || echo "⚠ ruby missing"
+  echo
+
+  local projects=()
+  local proj=""
+
+  if [[ -z "$workflow_repo" ]]; then
+    echo
+    warn "No team workflow root configured; skipping project-level checks"
+    return 0
+  fi
+
+  if [[ "$global_mode" == true ]]; then
+    while IFS= read -r proj; do
+      [[ -n "$proj" ]] || continue
+      projects+=("$proj")
+    done < <(list_projects_in_repo "$workflow_repo")
+  elif [[ -n "$project_name" ]]; then
+    validate_project_name "$project_name"
+    projects+=("$project_name")
+  else
+    error "No project context found"
+    info "Run from a linked project repo, or pass --project <name> or --global"
+    exit 1
+  fi
+
+  local fix_candidates=()
+  local any_issue=false
+  local project
+  for project in "${projects[@]}"; do
+    ensure_project_exists "$workflow_repo" "$project"
+    echo "[$project]"
+
+    load_enabled_services_for_project "$workflow_repo" "$project"
+    if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
+      echo "  - (no services configured)"
+      echo
+      continue
+    fi
+
+    local service
+    local project_needs_fix=false
+    for service in "${LOADED_PROJECT_SERVICES[@]}"; do
+      require_service "$service"
+      build_service_state_context "$workflow_repo" "$project" "$service"
+
+      local check_rc=0
+      set +e
+      run_service_check_with_timeout "$SERVICE_CTX_SCRIPT" "$SERVICE_CTX_CONFIG_JSON" "$SERVICE_CHECK_TIMEOUT_SEC"
+      check_rc=$?
+      set -e
+
+      if [[ "$check_rc" -eq 0 ]]; then
+        echo "✔ $service ready"
+      elif [[ "$check_rc" -eq 124 ]]; then
+        any_issue=true
+        project_needs_fix=true
+        echo "⚠ $service check timed out (${SERVICE_CHECK_TIMEOUT_SEC}s)"
+      else
+        any_issue=true
+        project_needs_fix=true
+        echo "⚠ $service missing or not ready"
+      fi
+    done
+
+    if [[ "$project_needs_fix" == true ]]; then
+      fix_candidates+=("$project")
+    fi
+
+    echo
+  done
+
+  if [[ "$any_issue" == true ]]; then
+    echo "Fix suggestions:"
+    local seen=""
+    local p
+    for p in "${fix_candidates[@]}"; do
+      if [[ ",${seen}," != *",$p,"* ]]; then
+        echo "- twf service install --project $p"
+        seen="${seen},$p"
+      fi
+    done
+    echo "- twf doctor --project <project>"
+  else
+    ok "All checked services are ready"
+  fi
+
+  if [[ "$fix_mode" == true && ${#fix_candidates[@]} -gt 0 ]]; then
+    if [[ "$assume_yes" != true ]]; then
+      if ! confirm_remove "Run safe service installs for suggested projects?"; then
+        info "Skipped automatic fixes"
+        return 0
+      fi
+    fi
+
+    local seen=""
+    local p
+    for p in "${fix_candidates[@]}"; do
+      if [[ ",${seen}," == *",$p,"* ]]; then
+        continue
+      fi
+      seen="${seen},$p"
+      info "Applying fixes for project '$p'"
+      run_service_install_for_project "$workflow_repo" "$p" "$assume_yes"
+    done
+    ok "Doctor fix run completed"
+  fi
 }
 
 cmd_update() {
@@ -1517,7 +1735,59 @@ read_rendered_config_root() {
   ruby -ryaml -e 'data = YAML.safe_load(File.read(ARGV[0]), aliases: true); value = data.is_a?(Hash) ? data["root"] : nil; puts(value.is_a?(String) ? value : "")' "$config_file" 2>/dev/null || true
 }
 
+run_service_check_with_timeout() {
+  local service_script="$1"
+  local service_config_json="$2"
+  local timeout_sec="$3"
+
+  TWF_SERVICE_CONFIG_JSON="$service_config_json" python3 - "$service_script" "$timeout_sec" <<'PY'
+import os
+import subprocess
+import sys
+
+script = sys.argv[1]
+timeout = float(sys.argv[2])
+env = os.environ.copy()
+
+try:
+    completed = subprocess.run([script, "check"], env=env, timeout=timeout)
+    sys.exit(completed.returncode)
+except subprocess.TimeoutExpired:
+    sys.exit(124)
+PY
+}
+
+infer_project_from_local_link() {
+  local local_link="$PWD/.twf/project.yml"
+  [[ -e "$local_link" ]] || {
+    echo ""
+    return 0
+  }
+
+  local resolved
+  resolved="$(python3 - "$local_link" <<'PY'
+import os
+import sys
+print(os.path.realpath(sys.argv[1]))
+PY
+  )"
+
+  if [[ "$resolved" == */project.yml ]]; then
+    basename "$(dirname "$resolved")"
+    return 0
+  fi
+
+  echo ""
+}
+
 infer_start_project_from_context() {
+  local linked_project
+  linked_project="$(infer_project_from_local_link)"
+  if [[ -n "$linked_project" ]]; then
+    echo "$linked_project"
+    return 0
+  fi
+
   local cwd_name
   cwd_name="$(basename "$PWD")"
 
@@ -1655,9 +1925,14 @@ cmd_start() {
     echo "[twf] Checking dependencies..."
     report_service_readiness_for_start "$workflow_repo" "$project_name"
 
-    if [[ ${#START_MISSING_SERVICES[@]} -gt 0 ]]; then
+    if [[ ${#START_MISSING_SERVICES[@]} -gt 0 || ${#START_TIMEOUT_SERVICES[@]} -gt 0 || ${#START_FAILED_SERVICES[@]} -gt 0 ]]; then
       echo
-      echo "[twf] Run: twf service install --project $project_name"
+      if [[ ${#START_MISSING_SERVICES[@]} -gt 0 ]]; then
+        echo "[twf] Run: twf service install --project $project_name"
+      fi
+      if [[ ${#START_TIMEOUT_SERVICES[@]} -gt 0 || ${#START_FAILED_SERVICES[@]} -gt 0 ]]; then
+        echo "[twf] Run: twf doctor --project $project_name"
+      fi
       if [[ "$strict_mode" == true ]]; then
         error "Missing required services for '$project_name' (strict mode enabled)"
         return 1
