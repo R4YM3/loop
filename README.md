@@ -19,6 +19,8 @@ twf start      # run everything
 That’s it.
 Your full development environment is running.
 
+No setup guides. No guessing. Just running code.
+
 ---
 
 ## ❌ Without `twf`
@@ -43,7 +45,7 @@ twf start
 
 ---
 
-## 🧠 How it works
+## 🧠 The idea
 
 `twf` introduces two simple concepts:
 
@@ -54,6 +56,8 @@ A **project** is a runnable development workflow.
 ### Services
 
 A **service** is a reusable unit of work (e.g. `web`, `api`, `worker`, `redis`).
+
+Services define how parts of your system run — and can be reused across projects.
 
 ---
 
@@ -115,6 +119,8 @@ twf start
 
 ## 🧠 Smart detection
 
+`twf` understands your project and suggests services automatically.
+
 `twf` automatically detects your project type and suggests services:
 
 * Node -> web/api
@@ -127,13 +133,13 @@ Built-in services include:
 
 * web / api
 * databases (`redis`, `postgres`)
-* language runtimes (`node`, `python`, and more)
+* language runtimes (`node`, `python`, and others)
 
 ---
 
 ## 🎯 Demo
 
-Try a working setup instantly:
+See a real workflow in seconds:
 
 ```bash
 twf demo
@@ -206,7 +212,7 @@ Use `twf` when:
 
 ## ⚙️ Commands
 
-**💡 Commands automatically detect your current project.**
+**💡 Commands automatically detect your current project — no flags needed.**
 
 Most commands infer the current project when you run them inside a linked repo (`.twf/project.yml`).
 Use `--project <name>` only when targeting another project.
@@ -242,6 +248,8 @@ Use `--project <name>` only when targeting another project.
 ---
 
 ## 🏗 Workflow structure
+
+All workflows are stored centrally, but editable from each project.
 
 ```text
 <team-workflows-root>/
