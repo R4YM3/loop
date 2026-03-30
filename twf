@@ -50,8 +50,9 @@ Examples:
   twf add my-project --dry-run
   twf add
   twf remove my-project
-  twf service add node --project my-project
-  twf service install --project my-project
+  twf service add node
+  twf service install
+  twf service add redis --project other-project
   twf demo
   twf status
   twf validate
@@ -60,6 +61,151 @@ Examples:
   twf start my-project
   twf stop my-project
 EOF
+}
+
+usage_quick() {
+  cat <<'EOF'
+Usage: twf <command> [options]
+
+Common commands:
+  twf add [project-name]          Create a project workflow
+  twf service add <service>       Add service to current project
+  twf service install             Install services for current project
+  twf start [project]             Start workflow
+  twf stop [project]              Stop workflow
+  twf status                      Show running workflows and health
+  twf doctor                      Diagnose issues and show fixes
+
+Help:
+  twf help                        Show this quick help
+  twf help --all                  Show full command reference
+  twf help <command>              Show help for a command
+
+Examples:
+  twf add
+  twf service add web
+  twf service install
+  twf start
+EOF
+}
+
+closest_command() {
+  local needle="$1"
+  local commands=(add remove service demo status validate doctor update list start stop uninstall version help)
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$needle" "${commands[@]}" <<'PY'
+import difflib
+import sys
+
+needle = sys.argv[1]
+commands = sys.argv[2:]
+matches = difflib.get_close_matches(needle, commands, n=1, cutoff=0.5)
+print(matches[0] if matches else "")
+PY
+    return 0
+  fi
+
+  local cmd
+
+  for cmd in "${commands[@]}"; do
+    if [[ "$cmd" == "$needle"* || "$needle" == "$cmd"* ]]; then
+      echo "$cmd"
+      return 0
+    fi
+  done
+
+  for cmd in "${commands[@]}"; do
+    if [[ "$cmd" == *"$needle"* || "$needle" == *"$cmd"* ]]; then
+      echo "$cmd"
+      return 0
+    fi
+  done
+
+  echo ""
+}
+
+cmd_help() {
+  local topic="${1:-}"
+
+  if [[ -z "$topic" ]]; then
+    usage_quick
+    return 0
+  fi
+
+  case "$topic" in
+  --all)
+    usage
+    ;;
+  add | remove | service | doctor | uninstall)
+    "$0" "$topic" --help
+    ;;
+  start)
+    cat <<'EOF'
+Usage: twf start <project-name> [tmuxinator args...] [--strict]
+
+Starts a workflow session.
+If no project is provided, twf tries to infer it from current context.
+EOF
+    ;;
+  stop)
+    cat <<'EOF'
+Usage: twf stop <project-name>
+
+Stops a running workflow session.
+If no project is provided, twf tries to infer it from current context.
+EOF
+    ;;
+  demo)
+    cat <<'EOF'
+Usage: twf demo [target-dir]
+
+Scaffolds a demo workspace with web + api services.
+EOF
+    ;;
+  status)
+    cat <<'EOF'
+Usage: twf status
+
+Shows running project sessions and service readiness.
+EOF
+    ;;
+  list)
+    cat <<'EOF'
+Usage: twf list
+
+Lists team workflow projects and installed tmuxinator aliases.
+EOF
+    ;;
+  validate)
+    cat <<'EOF'
+Usage: twf validate
+
+Validates workflow project files in the configured team workflow root.
+EOF
+    ;;
+  update)
+    cat <<'EOF'
+Usage: twf update
+
+Pulls latest twf runtime and refreshes the twf CLI symlink.
+EOF
+    ;;
+  version)
+    version
+    ;;
+  help)
+    usage_quick
+    ;;
+  *)
+    error "Unknown help topic: $topic"
+    local suggestion
+    suggestion="$(closest_command "$topic")"
+    if [[ -n "$suggestion" ]]; then
+      info "Did you mean: twf help $suggestion"
+    fi
+    ;;
+  esac
 }
 
 version() {
@@ -337,6 +483,76 @@ detect_suggested_services() {
     "redis.conf" \
     "redis/*.conf"; then
     suggestions+=("redis")
+  fi
+
+  if has_path_match "$source_root" \
+    "pom.xml" \
+    "build.gradle" \
+    "build.gradle.kts" \
+    "settings.gradle" \
+    "settings.gradle.kts" \
+    "gradlew" \
+    "mvnw"; then
+    suggestions+=("java")
+  fi
+
+  if has_path_match "$source_root" \
+    "go.mod" \
+    "go.sum" \
+    "go.work"; then
+    suggestions+=("go")
+  fi
+
+  if has_path_match "$source_root" \
+    "Gemfile" \
+    "Gemfile.lock" \
+    ".ruby-version" \
+    "Rakefile"; then
+    suggestions+=("ruby")
+  fi
+
+  if has_path_match "$source_root" \
+    "composer.json" \
+    "composer.lock" \
+    "phpunit.xml" \
+    "phpunit.xml.dist"; then
+    suggestions+=("php")
+  fi
+
+  if has_path_match "$source_root" \
+    "Cargo.toml" \
+    "Cargo.lock" \
+    "rust-toolchain.toml"; then
+    suggestions+=("rust")
+  fi
+
+  if has_path_match "$source_root" \
+    "postgresql.conf" \
+    "postgres.conf" \
+    "pg_hba.conf"; then
+    suggestions+=("postgres")
+  fi
+
+  if has_path_match "$source_root" \
+    "CMakeLists.txt" \
+    "meson.build" \
+    "Makefile" \
+    "*.c" \
+    "*.h"; then
+    suggestions+=("c")
+  fi
+
+  if has_path_match "$source_root" \
+    "CMakeLists.txt" \
+    "meson.build" \
+    "Makefile" \
+    "*.cpp" \
+    "*.cc" \
+    "*.cxx" \
+    "*.hpp" \
+    "*.hh" \
+    "*.hxx"; then
+    suggestions+=("cpp")
   fi
 
   local seen=","
@@ -1208,7 +1424,13 @@ cmd_service_add() {
 
   add_service_to_project_config "$repo" "$PARSED_PROJECT_NAME" "$PARSED_SERVICE_NAME"
   ok "Added service '$PARSED_SERVICE_NAME' to project '$PARSED_PROJECT_NAME'"
-  info "Run: twf service install --project $PARSED_PROJECT_NAME"
+  local inferred_project
+  inferred_project="$(infer_start_project_from_context)"
+  if [[ "$inferred_project" == "$PARSED_PROJECT_NAME" ]]; then
+    info "Run: twf service install"
+  else
+    info "Run: twf service install --project $PARSED_PROJECT_NAME"
+  fi
 }
 
 cmd_service_remove() {
@@ -2224,7 +2446,7 @@ main() {
 
   case "$command" in
   help | -h | --help)
-    usage
+    cmd_help "$@"
     ;;
   version | -v | --version)
     version
@@ -2267,7 +2489,12 @@ main() {
     ;;
   *)
     error "Unknown command: $command"
-    usage
+    local suggestion
+    suggestion="$(closest_command "$command")"
+    if [[ -n "$suggestion" ]]; then
+      info "Did you mean: twf $suggestion"
+    fi
+    usage_quick
     exit 1
     ;;
   esac

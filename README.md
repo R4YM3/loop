@@ -111,6 +111,8 @@ twf start
 
 `twf add` also suggests services automatically based on common project markers (for example Node, Python, containers, .NET, Redis).
 
+Core services maintained by `twf` include: `node`, `python`, `containers`, `dotnet`, `redis`, `java`, `go`, `ruby`, `php`, `rust`, `postgres`, `c`, `cpp`.
+
 ---
 
 ## 🎯 Demo
