@@ -1,8 +1,0 @@
-partials:
-  example-app:
-    editor_cmd: "nvim"
-
-windows:
-  - notes:
-      panes:
-        - "echo 'Add personal panes in this override file' && zsh -l"

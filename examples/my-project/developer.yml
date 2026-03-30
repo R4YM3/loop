@@ -1,0 +1,5 @@
+services:
+  enabled:
+    - web
+    - api
+  config: {}

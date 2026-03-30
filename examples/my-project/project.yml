@@ -1,0 +1,24 @@
+name: my-project
+root: /path/to/my-project
+
+startup_window: web
+
+windows:
+  - web:
+      root: .
+      layout: main-vertical
+      panes:
+        - editor: 'nvim'
+        - server: 'npm run dev || zsh -l'
+
+  - api:
+      root: .
+      layout: main-vertical
+      panes:
+        - editor: 'nvim'
+        - server: 'npm run server || zsh -l'
+
+  - twf:
+      root: ./.twf
+      panes:
+        - 'nvim || zsh -l'

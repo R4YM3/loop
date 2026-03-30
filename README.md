@@ -250,6 +250,11 @@ Use `--project <name>` only when targeting another project.
 │   └── developer.yml
 ```
 
+Example files for a modern project workflow are included in:
+
+- `examples/my-project/project.yml`
+- `examples/my-project/developer.yml`
+
 ---
 
 ## 🧪 Technical details
