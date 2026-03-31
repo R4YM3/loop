@@ -1,0 +1,28 @@
+name: service-contract-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  services:
+    name: service-contract-tests-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bats python3
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bats-core
+
+      - name: Run service contract tests
+        run: tests/scripts/test-services

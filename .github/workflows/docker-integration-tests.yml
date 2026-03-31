@@ -1,0 +1,15 @@
+name: docker-integration-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  docker:
+    name: docker-integration-linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run docker integration tests
+        run: tests/scripts/test-docker

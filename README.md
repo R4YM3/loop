@@ -273,6 +273,20 @@ Under the hood, `twf` uses tmuxinator.
 
 ---
 
+## ✅ Testing
+
+Flow and service tests are organized under `tests/` and run in CI on Linux, macOS, and WSL smoke checks.
+
+Run locally:
+
+```bash
+tests/scripts/test-flow
+tests/scripts/test-services
+tests/scripts/test-docker
+```
+
+---
+
 ## 📦 Requirements
 
 * git

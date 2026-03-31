@@ -1,0 +1,19 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    bats \
+    ca-certificates \
+    coreutils \
+    curl \
+    git \
+    python3 \
+    ruby \
+    tmux \
+    tmuxinator \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace

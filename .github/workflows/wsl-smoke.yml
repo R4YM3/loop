@@ -1,0 +1,21 @@
+name: wsl-smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  wsl:
+    name: wsl-smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: WSL smoke checks
+        shell: pwsh
+        run: |
+          $workspace = $env:GITHUB_WORKSPACE
+          $workspaceWsl = wsl wslpath -a "$workspace"
+          wsl bash -lc "cd '$workspaceWsl' && ./twf help"
+          wsl bash -lc "mkdir -p /tmp/twf-wsl-smoke && cd /tmp/twf-wsl-smoke && git init -q && touch package.json && TEAM_WORKFLOWS_ROOT=/tmp/team-workflows '$workspaceWsl/twf' add wsl-smoke --dry-run"
