@@ -73,5 +73,13 @@ jobs:
           $rest = $Matches[2] -replace '\\', '/'
           $workspaceWsl = "/mnt/$drive/$rest"
 
-          wsl.exe -d $DistroName -- bash -lc "cd '$workspaceWsl' && ./twf help"
-          wsl.exe -d $DistroName -- bash -lc "mkdir -p /tmp/twf-wsl-smoke && cd /tmp/twf-wsl-smoke && touch package.json && TEAM_WORKFLOWS_ROOT=/tmp/team-workflows '$workspaceWsl/twf' add wsl-smoke --dry-run"
+          $normalizeCmd = @'
+          tmpfile="/tmp/twf-smoke-$$"
+          tr -d '\r' < '__WORKSPACE__/twf' > "$tmpfile"
+          mv "$tmpfile" '__WORKSPACE__/twf'
+          chmod +x '__WORKSPACE__/twf'
+          '@.Replace('__WORKSPACE__', $workspaceWsl)
+
+          wsl.exe -d $DistroName -- bash -lc "$normalizeCmd"
+          wsl.exe -d $DistroName -- bash -lc "cd '$workspaceWsl' && bash ./twf help"
+          wsl.exe -d $DistroName -- bash -lc "mkdir -p /tmp/twf-wsl-smoke && cd /tmp/twf-wsl-smoke && touch package.json && TEAM_WORKFLOWS_ROOT=/tmp/team-workflows bash '$workspaceWsl/twf' add wsl-smoke --dry-run"
