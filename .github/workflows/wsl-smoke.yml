@@ -64,8 +64,14 @@ jobs:
           $ErrorActionPreference = "Stop"
           $DistroName = $env:TWF_WSL_DISTRO
           $workspace = $env:GITHUB_WORKSPACE
-          $workspaceWsl = wsl.exe -d $DistroName -- wslpath -a "$workspace"
-          $workspaceWsl = $workspaceWsl.Trim()
+
+          if ($workspace -notmatch '^([A-Za-z]):\\(.*)$') {
+            throw "Unexpected GITHUB_WORKSPACE format: $workspace"
+          }
+
+          $drive = $Matches[1].ToLower()
+          $rest = $Matches[2] -replace '\\', '/'
+          $workspaceWsl = "/mnt/$drive/$rest"
 
           wsl.exe -d $DistroName -- bash -lc "cd '$workspaceWsl' && ./twf help"
           wsl.exe -d $DistroName -- bash -lc "mkdir -p /tmp/twf-wsl-smoke && cd /tmp/twf-wsl-smoke && touch package.json && TEAM_WORKFLOWS_ROOT=/tmp/team-workflows '$workspaceWsl/twf' add wsl-smoke --dry-run"
