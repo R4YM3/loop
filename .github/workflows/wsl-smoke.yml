@@ -12,10 +12,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Provision WSL distro
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $DistroName = "twf-ci"
+          $RunnerTemp = $env:RUNNER_TEMP
+          $RootFs = Join-Path $RunnerTemp "ubuntu-noble-wsl.rootfs.tar.gz"
+          $InstallPath = Join-Path $RunnerTemp "wsl\$DistroName"
+
+          $distrosRaw = wsl.exe --list --quiet 2>$null
+          $distros = @()
+          if ($distrosRaw) {
+            $distros = $distrosRaw -replace "`0", "" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
+          }
+
+          if (-not ($distros -contains $DistroName)) {
+            New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
+            Invoke-WebRequest -Uri "https://cloud-images.ubuntu.com/wsl/noble/current/ubuntu-noble-wsl-amd64-wsl.rootfs.tar.gz" -OutFile $RootFs
+            wsl.exe --import $DistroName $InstallPath $RootFs --version 2
+          }
+
       - name: WSL smoke checks
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $DistroName = "twf-ci"
           $workspace = $env:GITHUB_WORKSPACE
-          $workspaceWsl = wsl wslpath -a "$workspace"
-          wsl bash -lc "cd '$workspaceWsl' && ./twf help"
-          wsl bash -lc "mkdir -p /tmp/twf-wsl-smoke && cd /tmp/twf-wsl-smoke && git init -q && touch package.json && TEAM_WORKFLOWS_ROOT=/tmp/team-workflows '$workspaceWsl/twf' add wsl-smoke --dry-run"
+          $workspaceWsl = wsl.exe -d $DistroName -- wslpath -a "$workspace"
+          $workspaceWsl = $workspaceWsl.Trim()
+
+          wsl.exe -d $DistroName -- bash -lc "cd '$workspaceWsl' && ./twf help"
+          wsl.exe -d $DistroName -- bash -lc "mkdir -p /tmp/twf-wsl-smoke && cd /tmp/twf-wsl-smoke && touch package.json && TEAM_WORKFLOWS_ROOT=/tmp/team-workflows '$workspaceWsl/twf' add wsl-smoke --dry-run"
