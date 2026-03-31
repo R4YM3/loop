@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell entrypoints and scripts must stay LF for Unix execution
+twf text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+*.bats text eol=lf
+tests/scripts/* text eol=lf
