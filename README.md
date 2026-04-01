@@ -1,105 +1,19 @@
 # tmuxinator-team-workflows
 
-Run your entire team's development environment with one command.
+`twf` helps teams run development workflows with less setup friction and fewer local differences.
 
-`twf` standardizes how developers start, run, and customize development workflows — without sacrificing personal flexibility.
+It keeps team workflows consistent while still allowing developer-level overrides.
 
-`twf` is not about terminal tooling. It is about making your team faster, more consistent, and easier to onboard.
+## Core Concepts
 
----
+- **project** = runnable development workflow
+- **service** = reusable workflow unit (for example: web, api, worker, redis)
+- **command** = executable run instruction
+- **requirements** = what must be installed to support projects and services
+- **environment setup** = installing machine and project prerequisites
+- **runtime** = workflow execution
 
-## ⚡ Try it in 30 seconds
-
-```bash
-cd my-project
-twf add        # create workflow
-twf start      # run everything
-```
-
-That’s it.
-Your full development environment is running.
-
-No setup guides. No guessing. Just running code.
-
----
-
-## ❌ Without `twf`
-
-* Open 5 terminals
-* Run commands manually
-* Forget dependencies
-* Ask teammates
-* Waste time daily
-
----
-
-## ✅ With `twf`
-
-```bash
-twf start
-```
-
-* Everything runs
-* Same setup for everyone
-* Zero guesswork
-
----
-
-## 🧠 The idea
-
-`twf` introduces two simple concepts:
-
-### Projects
-
-A **project** is a runnable development workflow.
-
-### Services
-
-A **service** is a reusable unit of work (e.g. `web`, `api`, `worker`, `redis`).
-
-Services define how parts of your system run — and can be reused across projects.
-
----
-
-### Model
-
-* A project = a composition of services
-* Services are defined once and reused across projects (DRY)
-* Projects can add project-specific behavior
-
----
-
-### Example
-
-```yaml
-services:
-  web:
-    command: npm run dev
-  api:
-    command: npm run server
-  redis:
-    command: redis-server
-```
-
----
-
-## 👥 Team + Personal, without conflict
-
-`twf` separates shared and personal workflows:
-
-* Shared team config lives in a central workflow root
-* Personal tweaks live in your project
-
-```text
-.twf/project.yml
-.twf/developer.yml
-```
-
-👉 You can customize freely without breaking the team setup.
-
----
-
-## 🚀 Quickstart
+## Quickstart
 
 Install globally:
 
@@ -107,155 +21,86 @@ Install globally:
 curl -fsSL "https://raw.githubusercontent.com/R4YM3/tmuxinator-team-workflows/main/scripts/bootstrap.sh" | bash && exec "$SHELL" -l
 ```
 
-Create your first workflow:
+Create and run your first workflow:
 
 ```bash
 twf add
-twf service add web
-twf service add api
 twf install
 twf start
 ```
 
-If you run `twf add` in a folder with multiple direct child repositories, `twf` detects a multi-repo workspace and can create one workspace workflow automatically.
+That is enough for most projects.
 
-## 🧠 Smart detection
+## Typical Flow
 
-`twf` understands your project and suggests services automatically.
+1. `twf add`
+   - detects project/workspace context
+   - creates project config
+   - links local `.twf/` files
+2. `twf install`
+   - installs missing environment requirements
+   - installs project dependencies
+3. `twf start`
+   - starts the workflow
+   - warns if readiness is incomplete
+4. `twf doctor`
+   - diagnoses readiness and configuration issues
 
-`twf` automatically detects your project type and suggests services:
+## Team + Developer Config
 
-* Node -> web/api
-* Python -> app/worker
-* Containers -> docker-based services
+Shared and personal settings are separated:
 
-👉 Less setup, more running.
-
-Built-in services include:
-
-* web / api
-* databases (`redis`, `postgres`)
-* language runtimes (`node`, `python`, and others)
-
----
-
-## 🎯 Demo
-
-See a real workflow in seconds:
-
-```bash
-twf demo
+```text
+.twf/project.yml
+.twf/developer.yml
 ```
 
-This creates a demo workspace with:
+- Team defaults live in project workflow config.
+- Developer-specific adjustments live in override config.
 
-* Next.js web service
-* Simple API service
-* Pre-configured workflow
+## Workspace Detection
 
-Start it:
+If `twf add` runs in a directory with multiple direct child repositories, `twf` can create one workspace workflow automatically.
 
-```bash
-twf install --project twf-demo
-twf start twf-demo
-```
+## Commands
 
----
+Most commands infer the current project when run inside a linked repository.
 
-## 🧩 Service-first workflows
+### Project
 
-Reuse services across projects:
+- `twf add`
+- `twf remove`
 
-```bash
-twf service add web
-twf service add api
-twf service add worker
-twf service add redis
-twf service add redis --project other-project
-```
+### Environment Setup
 
-👉 Define once, reuse everywhere.
-
----
-
-## 🔍 Status & health
-
-```bash
-twf status
-```
-
-See:
-
-* running workflows
-* service readiness
-* missing dependencies
-
-👉 Quickly spot what’s broken or missing.
-
----
-
-## 🧭 When to use `twf`
-
-Use `twf` when:
-
-* your project has multiple services
-* your team needs consistent workflows
-* onboarding takes too long
-* developers run things differently
-
-## 💼 Why this matters
-
-* Faster onboarding
-* Fewer setup mistakes
-* Consistent environments
-* Less time wasted on setup
-
----
-
-## ⚙️ Commands
-
-**💡 Commands automatically detect your current project — no flags needed.**
-
-Most commands infer the current project when you run them inside a linked repo (`.twf/project.yml`).
-Use `--project <name>` only when targeting another project.
-
-### Projects
-
-* `twf add`
-* `twf remove`
+- `twf install`
 
 ### Services
 
-* `twf service add`
-* `twf service remove`
-* `twf service list`
-* `twf service install`
+- `twf service add`
+- `twf service remove`
+- `twf service list`
+- `twf service install`
 
-### Install
+### Runtime and Health
 
-* `twf install`
-
-### Run
-
-* `twf start`
-* `twf stop`
-* `twf status`
+- `twf start`
+- `twf stop`
+- `twf status`
+- `twf doctor`
 
 ### Other
 
-* `twf demo`
-* `twf validate`
-* `twf doctor` (`--project`, `--global`, `--fix`)
-* `twf list`
-* `twf update`
-* `twf uninstall`
-* `twf version`
+- `twf demo`
+- `twf validate`
+- `twf list`
+- `twf update`
+- `twf uninstall`
+- `twf version`
 
----
+## Workflow Structure
 
-## 🏗 Workflow structure
-
-All workflows are stored centrally, but editable from each project.
+Workflows are stored in a central root and linked into local repositories.
 
 ```text
 <team-workflows-root>/
@@ -264,22 +109,12 @@ All workflows are stored centrally, but editable from each project.
 │   └── developer.yml
 ```
 
-Example files for a modern project workflow are included in:
+Example files:
 
 - `examples/my-project/project.yml`
 - `examples/my-project/developer.yml`
 
----
-
-## 🧪 Technical details
-
-Under the hood, `twf` uses tmuxinator.
-
----
-
-## ✅ Testing
-
-Flow and service tests are organized under `tests/` and run in CI on Linux, macOS, and WSL smoke checks.
+## Testing
 
 Run locally:
 
@@ -289,17 +124,6 @@ tests/scripts/test-services
 tests/scripts/test-docker
 ```
 
----
-
-## 📦 Requirements
-
-* git
-* tmux
-* tmuxinator
-* ruby
-
----
-
-## 📄 License
+## License
 
 MIT
