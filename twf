@@ -2493,6 +2493,30 @@ EOF
 }
 
 cmd_update() {
+  local verbose=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --verbose)
+      verbose=true
+      shift
+      ;;
+    -h | --help)
+      cat <<'EOF'
+Usage: twf update [--verbose]
+
+Pulls the latest twf runtime and refreshes the twf CLI symlink.
+EOF
+      return 0
+      ;;
+    *)
+      error "Unexpected argument: $1"
+      info "Usage: twf update [--verbose]"
+      return 1
+      ;;
+    esac
+  done
+
   if ! command -v git >/dev/null 2>&1; then
     error "git is required for twf update"
     exit 1
@@ -2503,15 +2527,77 @@ cmd_update() {
     exit 1
   fi
 
-  info "Updating twf runtime repo at $RUNTIME_DIR"
-  git -C "$RUNTIME_DIR" pull --ff-only
+  local before_rev
+  before_rev="$(git -C "$RUNTIME_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+
+  local display_dir="$RUNTIME_DIR"
+  if [[ -n "${HOME:-}" ]]; then
+    display_dir="${display_dir/#$HOME/~}"
+  fi
+
+  echo "◆ Updating twf"
+  echo "  Location: $display_dir"
+  echo
+  echo "Checking for updates"
+
+  if [[ "$verbose" == true ]]; then
+    if ! git -C "$RUNTIME_DIR" pull --ff-only; then
+      error "SYS-001 Failed to update runtime repository"
+      return 1
+    fi
+  else
+    if ! git -C "$RUNTIME_DIR" pull --ff-only >/dev/null 2>&1; then
+      error "SYS-001 Failed to update runtime repository"
+      info "Run: twf update --verbose"
+      return 1
+    fi
+  fi
+
+  local after_rev
+  after_rev="$(git -C "$RUNTIME_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
 
   local bin_dir="${TWF_BIN_DIR:-$DEFAULT_TWF_BIN_DIR}"
   mkdir -p "$bin_dir"
+
+  local symlink_path="$bin_dir/twf"
+  local relinked=false
+  local expected_target="$RUNTIME_DIR/twf"
+  if [[ ! -L "$symlink_path" ]]; then
+    relinked=true
+  else
+    local current_target=""
+    current_target="$(readlink "$symlink_path" || true)"
+    if [[ "$current_target" != "$expected_target" ]]; then
+      relinked=true
+    fi
+  fi
+
   ln -sfn "$RUNTIME_DIR/twf" "$bin_dir/twf"
-  ok "Refreshed CLI symlink: $bin_dir/twf"
-  ensure_bin_on_path "$bin_dir"
-  ok "Update complete"
+
+  if [[ "$before_rev" != "$after_rev" ]]; then
+    echo "  ✓ Update available"
+    echo "  From: $before_rev"
+    echo "  To:   $after_rev"
+    echo
+    echo "Applying update"
+    echo "  ✓ Runtime updated"
+    echo "  ✓ CLI is ready"
+    echo
+    echo "✓ Update complete"
+    echo "  Changed:"
+    echo "  - Updated twf to $after_rev"
+    if [[ "$relinked" == true ]]; then
+      echo "  - Refreshed CLI link"
+    fi
+  else
+    echo "  ✓ Already up to date"
+    echo "  Revision: $after_rev"
+    if [[ "$relinked" == true ]]; then
+      echo "  ✓ CLI link refreshed"
+    fi
+    echo
+    echo "✓ No changes needed"
+  fi
 }
 
 cmd_list() {
