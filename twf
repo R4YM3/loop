@@ -319,11 +319,6 @@ ensure_workflow_root_for_add() {
   echo "$configured"
 }
 
-is_workflow_repo() {
-  local dir="$1"
-  [[ -d "$dir" ]]
-}
-
 detect_workflow_repo() {
   local configured
   configured="$(read_configured_workflow_root)"
@@ -757,15 +752,6 @@ confirm_remove() {
   local response=""
   read -r -p "$prompt [y/N]: " response
   [[ "${response:-N}" =~ ^[Yy]$ ]]
-}
-
-is_directory_empty() {
-  local dir="$1"
-  local entries=()
-  shopt -s nullglob dotglob
-  entries=("$dir"/*)
-  shopt -u nullglob dotglob
-  [[ ${#entries[@]} -eq 0 ]]
 }
 
 render_project_template() {
