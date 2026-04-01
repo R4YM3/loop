@@ -17,7 +17,7 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "twf start warns when requirements are missing in non-strict mode" {
+@test "oo start warns when requirements are missing in non-strict mode" {
   cd "$TEST_ROOT/repos/start-warning"
 
   run_twf start --no-attach

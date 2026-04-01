@@ -3,7 +3,7 @@
 setup_test_env() {
   export REPO_ROOT
   REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-  export TWF_BIN="$REPO_ROOT/twf"
+  export OO_BIN="$REPO_ROOT/oo"
 
   export TEST_ROOT="$BATS_TEST_TMPDIR/work"
   export HOME="$TEST_ROOT/home"
@@ -16,8 +16,8 @@ setup_test_env() {
 
 configure_workflow_root() {
   local root="$1"
-  mkdir -p "$root" "$XDG_CONFIG_HOME/twf"
-  cat >"$XDG_CONFIG_HOME/twf/config.yml" <<EOF
+  mkdir -p "$root" "$XDG_CONFIG_HOME/oo"
+  cat >"$XDG_CONFIG_HOME/oo/config.yml" <<EOF
 team_workflows_root: "$root"
 EOF
 }
@@ -29,13 +29,13 @@ create_git_repo() {
 }
 
 run_twf() {
-  run env HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" "$TWF_BIN" "$@"
+  run env HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" "$OO_BIN" "$@"
 }
 
 run_twf_with_path() {
   local extra_path="$1"
   shift
-  run env HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" PATH="$extra_path:$PATH" "$TWF_BIN" "$@"
+  run env HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" PATH="$extra_path:$PATH" "$OO_BIN" "$@"
 }
 
 create_mock_command() {

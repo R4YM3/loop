@@ -9,14 +9,14 @@ while [[ -L "$SCRIPT_PATH" ]]; do
 done
 
 RUNTIME_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
-DEFAULT_TWF_HOME="${HOME}/.local/share/twf"
-DEFAULT_TWF_BIN_DIR="${HOME}/.local/bin"
+DEFAULT_OO_HOME="${HOME}/.local/share/oo"
+DEFAULT_OO_BIN_DIR="${HOME}/.local/bin"
 TMUXINATOR_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tmuxinator"
-TWF_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/twf"
-TWF_CONFIG_FILE="$TWF_CONFIG_DIR/config.yml"
+OO_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/oo"
+OO_CONFIG_FILE="$OO_CONFIG_DIR/config.yml"
 SERVICES_DIR="$RUNTIME_DIR/services"
-SERVICE_STATE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/twf/state/services"
-SERVICE_CHECK_TIMEOUT_SEC="${TWF_SERVICE_CHECK_TIMEOUT_SEC:-4.0}"
+SERVICE_STATE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/oo/state/services"
+SERVICE_CHECK_TIMEOUT_SEC="${OO_SERVICE_CHECK_TIMEOUT_SEC:-4.0}"
 
 START_MISSING_SERVICES=()
 START_TIMEOUT_SERVICES=()
@@ -62,7 +62,7 @@ error_block() {
 
 usage() {
   cat <<'EOF'
-Usage: twf <command> [options]
+Usage: oo <command> [options]
 
 Commands:
   add [project-name] [--dry-run] [--no-install]
@@ -76,59 +76,59 @@ Commands:
   doctor                       Run environment diagnostics
   install [--project <name>] [--yes] [--plan] [--no-project-deps] [--verbose]
                                Install machine readiness and project dependencies
-  update                       Pull latest twf runtime repo
+  update                       Pull latest oo runtime repo
   list                         List projects and installed aliases
   start <project> [args...]    Start a project workflow (supports --strict)
   stop <project>               Stop a running project workflow
-  uninstall [--yes]            Remove global twf CLI installation
-  version                      Print twf version
+  uninstall [--yes]            Remove global oo CLI installation
+  version                      Print oo version
   help                         Show this help
 
 Examples:
-  twf add my-project
-  twf add my-project --dry-run
-  twf add
-  twf remove my-project
-  twf service add node
-  twf service install
-  twf service add redis --project other-project
-  twf demo
-  twf status
-  twf validate
-  twf doctor
-  twf install
-  twf install --yes
-  twf update
-  twf start my-project
-  twf stop my-project
+  oo add my-project
+  oo add my-project --dry-run
+  oo add
+  oo remove my-project
+  oo service add node
+  oo service install
+  oo service add redis --project other-project
+  oo demo
+  oo status
+  oo validate
+  oo doctor
+  oo install
+  oo install --yes
+  oo update
+  oo start my-project
+  oo stop my-project
 EOF
 }
 
 usage_quick() {
   cat <<'EOF'
-Usage: twf <command> [options]
+Usage: oo <command> [options]
 
 Common commands:
-  twf add [project-name]          Create a project workflow
-  twf service add <service>       Add service to current project
-  twf service install             Install services for current project
-  twf start [project]             Start workflow
-  twf stop [project]              Stop workflow
-  twf status                      Show running workflows and health
-  twf doctor                      Diagnose issues and show fixes
-  twf install                     Install environment setup for project
+  oo add [project-name]          Create a project workflow
+  oo service add <service>       Add service to current project
+  oo service install             Install services for current project
+  oo start [project]             Start workflow
+  oo stop [project]              Stop workflow
+  oo status                      Show running workflows and health
+  oo doctor                      Diagnose issues and show fixes
+  oo install                     Install environment setup for project
 
 Help:
-  twf help                        Show this quick help
-  twf help --all                  Show full command reference
-  twf help <command>              Show help for a command
+  oo help                        Show this quick help
+  oo help --all                  Show full command reference
+  oo help <command>              Show help for a command
 
 Examples:
-  twf add
-  twf service add web
-  twf service install
-  twf install
-  twf start
+  oo add
+  oo service add web
+  oo service install
+  oo install
+  oo start
 EOF
 }
 
@@ -185,61 +185,61 @@ cmd_help() {
     ;;
   start)
     cat <<'EOF'
-Usage: twf start <project-name> [tmuxinator args...] [--strict]
+Usage: oo start <project-name> [tmuxinator args...] [--strict]
 
 Starts a workflow session.
-If no project is provided, twf tries to infer it from current context.
+If no project is provided, oo tries to infer it from current context.
 EOF
     ;;
   stop)
     cat <<'EOF'
-Usage: twf stop <project-name>
+Usage: oo stop <project-name>
 
 Stops a running workflow session.
-If no project is provided, twf tries to infer it from current context.
+If no project is provided, oo tries to infer it from current context.
 EOF
     ;;
   demo)
     cat <<'EOF'
-Usage: twf demo [target-dir]
+Usage: oo demo [target-dir]
 
 Scaffolds a demo workspace with web + api services.
 EOF
     ;;
   status)
     cat <<'EOF'
-Usage: twf status
+Usage: oo status
 
 Shows running project sessions and service readiness.
 EOF
     ;;
   list)
     cat <<'EOF'
-Usage: twf list
+Usage: oo list
 
 Lists team workflow projects and installed tmuxinator aliases.
 EOF
     ;;
   validate)
     cat <<'EOF'
-Usage: twf validate
+Usage: oo validate
 
 Validates workflow project files in the configured team workflow root.
 EOF
     ;;
   update)
     cat <<'EOF'
-Usage: twf update
+Usage: oo update
 
-Pulls latest twf runtime and refreshes the twf CLI symlink.
+Pulls latest oo runtime and refreshes the oo CLI symlink.
 EOF
     ;;
   install)
     cat <<'EOF'
-Usage: twf install [--project <project>] [--yes]
+Usage: oo install [--project <project>] [--yes]
 
 Installs machine readiness requirements and project dependencies.
-If no project is provided, twf tries to infer it from current context.
+If no project is provided, oo tries to infer it from current context.
 EOF
     ;;
   version)
@@ -253,7 +253,7 @@ EOF
     local suggestion
     suggestion="$(closest_command "$topic")"
     if [[ -n "$suggestion" ]]; then
-      info "Did you mean: twf help $suggestion"
+      info "Did you mean: oo help $suggestion"
     fi
     ;;
   esac
@@ -296,13 +296,13 @@ read_configured_workflow_root() {
     return 0
   fi
 
-  if [[ ! -f "$TWF_CONFIG_FILE" ]]; then
+  if [[ ! -f "$OO_CONFIG_FILE" ]]; then
     echo ""
     return 0
   fi
 
   local configured
-  configured="$(ruby -ryaml -e 'path = ARGV[0]; raw = YAML.safe_load(File.read(path), aliases: false); data = raw.is_a?(Hash) ? raw : {}; value = data["team_workflows_root"]; puts(value.is_a?(String) ? value : "")' "$TWF_CONFIG_FILE" 2>/dev/null || true)"
+  configured="$(ruby -ryaml -e 'path = ARGV[0]; raw = YAML.safe_load(File.read(path), aliases: false); data = raw.is_a?(Hash) ? raw : {}; value = data["team_workflows_root"]; puts(value.is_a?(String) ? value : "")' "$OO_CONFIG_FILE" 2>/dev/null || true)"
   if [[ -z "$configured" ]]; then
     echo ""
     return 0
@@ -314,12 +314,12 @@ read_configured_workflow_root() {
 save_configured_workflow_root() {
   local root="$1"
   if [[ "$root" == "$RUNTIME_DIR" ]]; then
-    error "team workflow root cannot be the twf runtime repository"
+    error "team workflow root cannot be the oo runtime repository"
     info "Choose a separate directory, e.g. ../team-workflows"
     exit 1
   fi
-  mkdir -p "$TWF_CONFIG_DIR"
-  cat >"$TWF_CONFIG_FILE" <<EOF
+  mkdir -p "$OO_CONFIG_DIR"
+  cat >"$OO_CONFIG_FILE" <<EOF
 team_workflows_root: "$root"
 EOF
 }
@@ -335,8 +335,8 @@ ensure_workflow_root_for_add() {
   configured="$(read_configured_workflow_root)"
   if [[ -n "$configured" ]]; then
     if [[ "$configured" == "$RUNTIME_DIR" ]]; then
-      error "Configured team workflow root points to twf runtime repository"
-      info "Run twf add from your project and choose a separate workflow root"
+      error "Configured team workflow root points to oo runtime repository"
+      info "Run oo add from your project and choose a separate workflow root"
       exit 1
     fi
     echo "$configured"
@@ -381,7 +381,10 @@ detect_workflow_repo() {
   local linked_project
   linked_project="$(infer_project_from_local_link)"
   if [[ -n "$linked_project" ]]; then
-    local local_link="$PWD/.twf/project.yml"
+    local local_link="$PWD/.oo/workflow.yaml"
+    if [[ ! -e "$local_link" ]]; then
+      local_link="$PWD/.oo/workflow.yml"
+    fi
     local resolved
     resolved="$(python3 - "$local_link" <<'PY'
 import os
@@ -405,7 +408,7 @@ require_workflow_repo() {
   repo="$(detect_workflow_repo)"
   if [[ -z "$repo" ]]; then
     error "No team workflow root is configured"
-    info "Run: twf add <project-name>"
+    info "Run: oo add <project-name>"
     exit 1
   fi
   echo "$repo"
@@ -425,7 +428,7 @@ require_service() {
   local service_name="$1"
   if ! service_exists "$service_name"; then
     error "Unknown service: $service_name"
-    info "Run 'twf service list' to see available services."
+    info "Run 'oo service list' to see available services."
     exit 1
   fi
 }
@@ -611,24 +614,78 @@ project_dir() {
 project_template_file() {
   local repo="$1"
   local project_name="$2"
-  echo "$(project_dir "$repo" "$project_name")/project.yml"
+  echo "$(project_dir "$repo" "$project_name")/workflow.yaml"
+}
+
+project_template_file_legacy_yml() {
+  local repo="$1"
+  local project_name="$2"
+  echo "$(project_dir "$repo" "$project_name")/workflow.yml"
+}
+
+resolve_project_template_file() {
+  local repo="$1"
+  local project_name="$2"
+  local yaml_file
+  local yml_file
+  yaml_file="$(project_template_file "$repo" "$project_name")"
+  yml_file="$(project_template_file_legacy_yml "$repo" "$project_name")"
+
+  if [[ -f "$yaml_file" ]]; then
+    echo "$yaml_file"
+    return 0
+  fi
+
+  if [[ -f "$yml_file" ]]; then
+    echo "$yml_file"
+    return 0
+  fi
+
+  echo "$yaml_file"
 }
 
 project_override_file() {
   local repo="$1"
   local project_name="$2"
-  echo "$(project_dir "$repo" "$project_name")/developer.yml"
+  echo "$(project_dir "$repo" "$project_name")/override.yaml"
+}
+
+project_override_file_legacy_yml() {
+  local repo="$1"
+  local project_name="$2"
+  echo "$(project_dir "$repo" "$project_name")/override.yml"
+}
+
+resolve_project_override_file() {
+  local repo="$1"
+  local project_name="$2"
+  local yaml_file
+  local yml_file
+  yaml_file="$(project_override_file "$repo" "$project_name")"
+  yml_file="$(project_override_file_legacy_yml "$repo" "$project_name")"
+
+  if [[ -f "$yaml_file" ]]; then
+    echo "$yaml_file"
+    return 0
+  fi
+
+  if [[ -f "$yml_file" ]]; then
+    echo "$yml_file"
+    return 0
+  fi
+
+  echo "$yaml_file"
 }
 
 ensure_project_exists() {
   local repo="$1"
   local project_name="$2"
   local template_file
-  template_file="$(project_template_file "$repo" "$project_name")"
+  template_file="$(resolve_project_template_file "$repo" "$project_name")"
 
   if [[ ! -f "$template_file" ]]; then
     error "Project template not found: $template_file"
-    info "Add the project first: twf add $project_name"
+    info "Add the project first: oo add $project_name"
     exit 1
   fi
 }
@@ -637,7 +694,7 @@ enabled_services_for_project() {
   local repo="$1"
   local project_name="$2"
   local override_file
-  override_file="$(project_override_file "$repo" "$project_name")"
+  override_file="$(resolve_project_override_file "$repo" "$project_name")"
 
   ruby -ryaml -e '
 path = ARGV[0]
@@ -657,7 +714,7 @@ service_config_json_for_project() {
   local project_name="$2"
   local service_name="$3"
   local override_file
-  override_file="$(project_override_file "$repo" "$project_name")"
+  override_file="$(resolve_project_override_file "$repo" "$project_name")"
 
   ruby -ryaml -rjson -e '
 path = ARGV[0]
@@ -682,6 +739,12 @@ add_service_to_project_config() {
   local service_name="$3"
   local override_file
   override_file="$(project_override_file "$repo" "$project_name")"
+  local resolved_override
+  resolved_override="$(resolve_project_override_file "$repo" "$project_name")"
+
+  if [[ "$resolved_override" != "$override_file" && -f "$resolved_override" && ! -f "$override_file" ]]; then
+    cp "$resolved_override" "$override_file"
+  fi
 
   mkdir -p "$(dirname "$override_file")"
   [[ -f "$override_file" ]] || printf '{}\n' >"$override_file"
@@ -707,6 +770,12 @@ remove_service_from_project_config() {
   local service_name="$3"
   local override_file
   override_file="$(project_override_file "$repo" "$project_name")"
+  local resolved_override
+  resolved_override="$(resolve_project_override_file "$repo" "$project_name")"
+
+  if [[ "$resolved_override" != "$override_file" && -f "$resolved_override" && ! -f "$override_file" ]]; then
+    cp "$resolved_override" "$override_file"
+  fi
 
   if [[ ! -f "$override_file" ]]; then
     return 0
@@ -1038,8 +1107,8 @@ EOF
   done
 
   cat <<'EOF'
-  - twf:
-      root: ./.twf
+  - oo:
+      root: ./.oo
       panes:
         - 'nvim || zsh -l'
 EOF
@@ -1058,24 +1127,24 @@ write_repo_readme() {
   cat >"$repo/README.md" <<EOF
 # Team workflow repository
 
-This repository is managed with \`twf\` and is intended to live outside application repositories.
+This repository is managed with \`oo\` and is intended to live outside application repositories.
 
-- Project workflows: \`<project>/project.yml\`
-- Project overrides: \`<project>/developer.yml\`
+- Project workflows: \`<project>/workflow.yaml\`
+- Project overrides: \`<project>/override.yaml\`
 
 Typical flow:
 
 \`\`\`bash
-twf service install --project $first_project
-twf validate
-twf doctor
-twf start $first_project
+oo service install --project $first_project
+oo validate
+oo doctor
+oo start $first_project
 \`\`\`
 
 You can add more projects later from this same repo:
 
 \`\`\`bash
-twf add another-project
+oo add another-project
 \`\`\`
 EOF
 }
@@ -1199,7 +1268,7 @@ list_projects_in_repo() {
 
   for d in "${dirs[@]}"; do
     [[ -d "$d" ]] || continue
-    [[ -f "$d/project.yml" ]] || continue
+    [[ -f "$d/workflow.yaml" || -f "$d/workflow.yml" ]] || continue
     basename "$d"
   done
 }
@@ -1209,11 +1278,13 @@ ensure_local_workflow_link() {
   local project_dir="$2"
   local repo_dir="$3"
   local quiet="${4:-false}"
-  local local_dir="$repo_dir/.twf"
-  local project_link="$local_dir/project.yml"
-  local developer_link="$local_dir/developer.yml"
-  local source_project_file="$project_dir/project.yml"
-  local source_developer_file="$project_dir/developer.yml"
+  local local_dir="$repo_dir/.oo"
+  local project_link="$local_dir/workflow.yaml"
+  local developer_link="$local_dir/override.yaml"
+  local source_project_file
+  local source_developer_file
+  source_project_file="$(resolve_project_template_file "$(dirname "$project_dir")" "$project_name")"
+  source_developer_file="$(resolve_project_override_file "$(dirname "$project_dir")" "$project_name")"
 
   mkdir -p "$local_dir"
   ln -sfn "$source_project_file" "$project_link"
@@ -1228,11 +1299,10 @@ ensure_local_workflow_link() {
   if [[ -d "$local_dir/workflows" ]]; then
     rm -rf "$local_dir/workflows"
   fi
-
   local gitignore_file="$repo_dir/.gitignore"
   if [[ -f "$gitignore_file" ]]; then
-    if ! grep -qF ".twf/" "$gitignore_file"; then
-      printf '\n.twf/\n' >>"$gitignore_file"
+    if ! grep -qF ".oo/" "$gitignore_file"; then
+      printf '\n.oo/\n' >>"$gitignore_file"
       ok "Updated gitignore: $gitignore_file"
     fi
   fi
@@ -1255,7 +1325,7 @@ cmd_add() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: twf add [project-name] [--dry-run] [--no-install]
+Usage: oo add [project-name] [--dry-run] [--no-install]
 
 - Creates a project workflow in the configured team workflow root.
 - If project-name is omitted, defaults to current folder name.
@@ -1342,8 +1412,8 @@ EOF
   local project_file=""
   local project_root_dir
   project_root_dir="$(project_dir "$workflow_repo" "$final_name")"
-  local override_file="$project_root_dir/developer.yml"
-  project_file="$project_root_dir/project.yml"
+  local override_file="$project_root_dir/override.yaml"
+  project_file="$project_root_dir/workflow.yaml"
   local suggested_services=()
   local suggested_service=""
   local seen_services=","
@@ -1447,15 +1517,15 @@ EOF
   fi
 
   if [[ "$no_install" == true ]]; then
-    info "Run: twf install"
+    info "Run: oo install"
     echo
     echo "Next:"
-    echo "  Start your environment → twf install"
+    echo "  Start your environment → oo install"
     return 0
   fi
 
   if ! is_interactive_terminal; then
-    info "Run: twf install"
+    info "Run: oo install"
     return 0
   fi
 
@@ -1474,7 +1544,7 @@ cmd_remove() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: twf remove <project-name> [--yes]
+Usage: oo remove <project-name> [--yes]
 
 Removes the tmuxinator alias for a project, then optionally removes
 local override/template files when running inside a workflow repo.
@@ -1495,7 +1565,7 @@ EOF
 
   if [[ -z "$project_name" ]]; then
     error "Missing project name"
-    info "Usage: twf remove <project-name> [--yes]"
+    info "Usage: oo remove <project-name> [--yes]"
     exit 1
   fi
 
@@ -1578,12 +1648,12 @@ run_service_install_for_project() {
     fi
 
     info "Installing service '$service' for project '$project_name'"
-    if ! TWF_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" TWF_SERVICE_ASSUME_YES="$assume_yes" bash "$SERVICE_CTX_SCRIPT" install; then
+    if ! OO_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" OO_SERVICE_ASSUME_YES="$assume_yes" bash "$SERVICE_CTX_SCRIPT" install; then
       error "Service install failed: $service"
       exit 1
     fi
 
-    if ! TWF_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" bash "$SERVICE_CTX_SCRIPT" check; then
+    if ! OO_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" bash "$SERVICE_CTX_SCRIPT" check; then
       error "Service check failed after install: $service"
       exit 1
     fi
@@ -1644,7 +1714,7 @@ report_service_readiness_for_start() {
           [[ "$print_output" == true ]] && printf '✔ %s -> ready (detected on machine)\n' "$service"
         fi
       else
-        [[ "$print_output" == true ]] && printf '⚠ %s -> detected but not managed by twf\n' "$service"
+        [[ "$print_output" == true ]] && printf '⚠ %s -> detected but not managed by oo\n' "$service"
         START_MISSING_SERVICES+=("$service")
       fi
       continue
@@ -1684,7 +1754,7 @@ service_requirement_label() {
   local service="$1"
   case "$service" in
   node)
-    echo "node (required >= v${TWF_NODE_REQUIRED_MAJOR:-20})"
+    echo "node (required >= v${OO_NODE_REQUIRED_MAJOR:-20})"
     ;;
   *)
     echo "$service"
@@ -1696,7 +1766,7 @@ service_ready_detail() {
   local service="$1"
   case "$service" in
   node)
-    local required_major="${TWF_NODE_REQUIRED_MAJOR:-20}"
+    local required_major="${OO_NODE_REQUIRED_MAJOR:-20}"
     local node_version=""
     node_version="$(node --version 2>/dev/null || true)"
     if [[ -n "$node_version" ]]; then
@@ -1768,14 +1838,14 @@ install_selected_services_for_project() {
     service_label="$(service_requirement_label "$service")"
 
     echo "  ... $service_label"
-    if ! TWF_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" TWF_SERVICE_ASSUME_YES="$assume_yes" bash "$SERVICE_CTX_SCRIPT" install; then
-      error_block "INS-001" "Install failed" "$service_label install failed" "Run again with --verbose" "Run: twf doctor"
+    if ! OO_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" OO_SERVICE_ASSUME_YES="$assume_yes" bash "$SERVICE_CTX_SCRIPT" install; then
+      error_block "INS-001" "Install failed" "$service_label install failed" "Run again with --verbose" "Run: oo doctor"
       failures+=("$service")
       continue
     fi
 
-    if ! TWF_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" bash "$SERVICE_CTX_SCRIPT" check >/dev/null 2>&1; then
-      error_block "INS-002" "Install failed" "$service_label check failed after install" "Run again with --verbose" "Run: twf doctor"
+    if ! OO_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" bash "$SERVICE_CTX_SCRIPT" check >/dev/null 2>&1; then
+      error_block "INS-002" "Install failed" "$service_label check failed after install" "Run again with --verbose" "Run: oo doctor"
       failures+=("$service")
       continue
     fi
@@ -1801,7 +1871,7 @@ project_root_for_project() {
 
   config_source_file="$(project_template_file "$repo" "$project_name")"
   config_override_file="$(project_override_file "$repo" "$project_name")"
-  rendered_config_file="$(mktemp "${TMPDIR:-/tmp}/twf-install-${project_name}-XXXXXX")"
+  rendered_config_file="$(mktemp "${TMPDIR:-/tmp}/oo-install-${project_name}-XXXXXX")"
 
   if ! render_project_config_for_start "$config_source_file" "$config_override_file" "$rendered_config_file"; then
     rm -f "$rendered_config_file"
@@ -1971,7 +2041,7 @@ parse_service_scope_args() {
 }
 
 cmd_service_add() {
-  parse_service_project_args "Usage: twf service add <service> [--project <project>]" "$@"
+  parse_service_project_args "Usage: oo service add <service> [--project <project>]" "$@"
   validate_project_name "$PARSED_PROJECT_NAME"
   require_service "$PARSED_SERVICE_NAME"
 
@@ -1984,14 +2054,14 @@ cmd_service_add() {
   local inferred_project
   inferred_project="$(infer_start_project_from_context)"
   if [[ "$inferred_project" == "$PARSED_PROJECT_NAME" ]]; then
-    info "Run: twf service install"
+    info "Run: oo service install"
   else
-    info "Run: twf service install --project $PARSED_PROJECT_NAME"
+    info "Run: oo service install --project $PARSED_PROJECT_NAME"
   fi
 }
 
 cmd_service_remove() {
-  parse_service_project_args "Usage: twf service remove <service> [--project <project>]" "$@"
+  parse_service_project_args "Usage: oo service remove <service> [--project <project>]" "$@"
   validate_project_name "$PARSED_PROJECT_NAME"
 
   local repo
@@ -2003,7 +2073,7 @@ cmd_service_remove() {
 }
 
 cmd_service_list() {
-  parse_service_scope_args "Usage: twf service list [--project <project> | --global]" false "$@"
+  parse_service_scope_args "Usage: oo service list [--project <project> | --global]" false "$@"
 
   echo "Available services:"
   local available=()
@@ -2056,7 +2126,7 @@ cmd_service_list() {
 }
 
 cmd_service_install() {
-  parse_service_scope_args "Usage: twf service install [--project <project>] [--yes] | --global [--yes]" true "$@"
+  parse_service_scope_args "Usage: oo service install [--project <project>] [--yes] | --global [--yes]" true "$@"
 
   if [[ -z "$PARSED_PROJECT_NAME" && "$PARSED_GLOBAL" != true ]]; then
     error "Missing scope: use --project <name>, --global, or run from a linked project repo"
@@ -2081,7 +2151,7 @@ cmd_service_install() {
 
 cmd_service_help() {
   cat <<'EOF'
-Usage: twf service <command> [options]
+Usage: oo service <command> [options]
 
 Commands:
   add <service> [--project <project>]
@@ -2114,7 +2184,7 @@ cmd_service() {
     ;;
   *)
     error "Unknown service subcommand: $subcommand"
-    info "Run: twf service --help"
+    info "Run: oo service --help"
     exit 1
     ;;
   esac
@@ -2123,7 +2193,7 @@ cmd_service() {
 cmd_validate() {
   local workflow_repo
   workflow_repo="$(require_workflow_repo)"
-  TWF_WORKFLOW_REPO="$workflow_repo" bash "$RUNTIME_DIR/scripts/validate-workflows.sh"
+  OO_WORKFLOW_REPO="$workflow_repo" bash "$RUNTIME_DIR/scripts/validate-workflows.sh"
 }
 
 cmd_doctor() {
@@ -2162,7 +2232,7 @@ cmd_doctor() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: twf doctor [--project <project> | --global] [--fix] [--yes] [--verbose]
+Usage: oo doctor [--project <project> | --global] [--fix] [--yes] [--verbose]
 
 Diagnoses runtime and service readiness.
 Use --fix to run safe automatic service installs.
@@ -2330,14 +2400,14 @@ EOF
   done
 
   echo
-  local install_cmd="twf install"
+  local install_cmd="oo install"
   if [[ "$global_mode" == true ]]; then
-    install_cmd="twf install --project <project>"
+    install_cmd="oo install --project <project>"
   elif [[ -n "$project_name" ]]; then
     local inferred
     inferred="$(infer_start_project_from_context)"
     if [[ "$inferred" != "$project_name" ]]; then
-      install_cmd="twf install --project $project_name"
+      install_cmd="oo install --project $project_name"
     fi
   fi
 
@@ -2347,7 +2417,7 @@ EOF
     if [[ "$global_mode" != true ]]; then
       echo
       echo "Next:"
-      echo "  twf start"
+      echo "  oo start"
     fi
   else
     if [[ "$env_issue_count" -gt 0 && "$project_issue_count" -gt 0 ]]; then
@@ -2359,7 +2429,7 @@ EOF
     echo
     echo "What you can do"
     echo "  • Install environment: $install_cmd"
-    echo "  • Re-check: twf doctor"
+    echo "  • Re-check: oo doctor"
   fi
 
   if [[ "$fix_mode" == true && ${#fix_candidates[@]} -gt 0 ]]; then
@@ -2420,7 +2490,7 @@ cmd_install() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: twf install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]
+Usage: oo install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]
 
 Installs machine readiness requirements and project dependencies.
 EOF
@@ -2428,7 +2498,7 @@ EOF
       ;;
     *)
       error "Unexpected argument: $1"
-      info "Usage: twf install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]"
+      info "Usage: oo install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]"
       exit 1
       ;;
     esac
@@ -2443,7 +2513,7 @@ EOF
 
   if [[ -z "$project_name" ]]; then
     error "Missing project name"
-    info "Usage: twf install [--project <project>] [--yes]"
+    info "Usage: oo install [--project <project>] [--yes]"
     info "Tip: run from a linked project repo or pass --project <name>"
     exit 1
   fi
@@ -2582,7 +2652,7 @@ EOF
   fi
   echo
   echo "Next:"
-  echo "  Run your project → twf start"
+  echo "  Run your project → oo start"
 }
 
 cmd_update() {
@@ -2596,27 +2666,27 @@ cmd_update() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: twf update [--verbose]
+Usage: oo update [--verbose]
 
-Pulls the latest twf runtime and refreshes the twf CLI symlink.
+Pulls the latest oo runtime and refreshes the oo CLI symlink.
 EOF
       return 0
       ;;
     *)
       error "Unexpected argument: $1"
-      info "Usage: twf update [--verbose]"
+      info "Usage: oo update [--verbose]"
       return 1
       ;;
     esac
   done
 
   if ! command -v git >/dev/null 2>&1; then
-    error "git is required for twf update"
+    error "git is required for oo update"
     exit 1
   fi
 
   if ! git -C "$RUNTIME_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    error "twf update requires a git checkout at: $RUNTIME_DIR"
+    error "oo update requires a git checkout at: $RUNTIME_DIR"
     exit 1
   fi
 
@@ -2628,7 +2698,7 @@ EOF
     display_dir="${display_dir/#$HOME/~}"
   fi
 
-  echo "◆ Updating twf"
+  echo "◆ Updating oo"
   echo "  Location: $display_dir"
   echo
   echo "Checking for updates"
@@ -2641,7 +2711,7 @@ EOF
   else
     if ! git -C "$RUNTIME_DIR" pull --ff-only >/dev/null 2>&1; then
       error "SYS-001 Failed to update runtime repository"
-      info "Run: twf update --verbose"
+      info "Run: oo update --verbose"
       return 1
     fi
   fi
@@ -2649,12 +2719,12 @@ EOF
   local after_rev
   after_rev="$(git -C "$RUNTIME_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
 
-  local bin_dir="${TWF_BIN_DIR:-$DEFAULT_TWF_BIN_DIR}"
+  local bin_dir="${OO_BIN_DIR:-$DEFAULT_OO_BIN_DIR}"
   mkdir -p "$bin_dir"
 
-  local symlink_path="$bin_dir/twf"
+  local symlink_path="$bin_dir/oo"
   local relinked=false
-  local expected_target="$RUNTIME_DIR/twf"
+  local expected_target="$RUNTIME_DIR/oo"
   if [[ ! -L "$symlink_path" ]]; then
     relinked=true
   else
@@ -2665,7 +2735,7 @@ EOF
     fi
   fi
 
-  ln -sfn "$RUNTIME_DIR/twf" "$bin_dir/twf"
+  ln -sfn "$RUNTIME_DIR/oo" "$bin_dir/oo"
 
   if [[ "$before_rev" != "$after_rev" ]]; then
     echo "  ✓ Update available"
@@ -2678,7 +2748,7 @@ EOF
     echo
     echo "✓ Update complete"
     echo "  Changed:"
-    echo "  - Updated twf to $after_rev"
+    echo "  - Updated oo to $after_rev"
     if [[ "$relinked" == true ]]; then
       echo "  - Refreshed CLI link"
     fi
@@ -2698,7 +2768,7 @@ cmd_list() {
   repo="$(read_configured_workflow_root)"
   if [[ -z "$repo" || ! -d "$repo" ]]; then
     info "No team workflow root configured."
-    info "Run: twf add <project-name>"
+    info "Run: oo add <project-name>"
     echo
   else
     echo "Team workflows ($repo):"
@@ -2756,7 +2826,7 @@ cmd_status() {
   if [[ -z "$repo" || ! -d "$repo" ]]; then
     echo
     info "No team workflow root configured yet"
-    info "Run: twf add <project-name>"
+    info "Run: oo add <project-name>"
     return 0
   fi
 
@@ -2793,17 +2863,17 @@ cmd_status() {
 }
 
 cmd_demo() {
-  local target_dir="${1:-$HOME/code/twf-demo}"
+  local target_dir="${1:-$HOME/code/oo-demo}"
   target_dir="$(expand_path "$target_dir")"
 
   if [[ -e "$target_dir" ]]; then
     error "Demo target already exists: $target_dir"
-    info "Pass a custom path: twf demo /path/to/new-folder"
+    info "Pass a custom path: oo demo /path/to/new-folder"
     exit 1
   fi
 
   if ! command -v git >/dev/null 2>&1; then
-    error "git is required for twf demo"
+    error "git is required for oo demo"
     exit 1
   fi
 
@@ -2818,7 +2888,7 @@ cmd_demo() {
   mkdir -p "$target_dir/api"
   cat >"$target_dir/api/package.json" <<'EOF'
 {
-  "name": "twf-demo-api",
+  "name": "oo-demo-api",
   "private": true,
   "type": "module",
   "scripts": {
@@ -2847,16 +2917,16 @@ EOF
   local old_pwd
   old_pwd="$PWD"
   cd "$target_dir"
-  cmd_add twf-demo
+  cmd_add oo-demo
   local workflow_repo
   workflow_repo="$(require_workflow_repo)"
   local demo_project_file
-  demo_project_file="$(project_template_file "$workflow_repo" "twf-demo")"
+  demo_project_file="$(project_template_file "$workflow_repo" "oo-demo")"
   local demo_override_file
-  demo_override_file="$(project_override_file "$workflow_repo" "twf-demo")"
+  demo_override_file="$(project_override_file "$workflow_repo" "oo-demo")"
 
   cat >"$demo_project_file" <<EOF
-name: twf-demo
+name: oo-demo
 root: "$target_dir"
 
 startup_window: web
@@ -2876,8 +2946,8 @@ windows:
         - editor: 'nvim'
         - server: 'npm install && npm run dev || zsh -l'
 
-  - twf:
-      root: ./.twf
+  - oo:
+      root: ./.oo
       panes:
         - 'nvim || zsh -l'
 EOF
@@ -2895,8 +2965,8 @@ EOF
   ok "Demo project created"
   info "Try it now:"
   echo "  cd \"$target_dir\""
-  echo "  twf service install --project twf-demo"
-  echo "  twf start twf-demo"
+  echo "  oo service install --project oo-demo"
+  echo "  oo start oo-demo"
 }
 
 sanitize_tmux_env() {
@@ -2966,7 +3036,7 @@ run_service_check_with_timeout() {
   local service_config_json="$2"
   local timeout_sec="$3"
 
-  TWF_SERVICE_CONFIG_JSON="$service_config_json" python3 - "$service_script" "$timeout_sec" <<'PY'
+  OO_SERVICE_CONFIG_JSON="$service_config_json" python3 - "$service_script" "$timeout_sec" <<'PY'
 import os
 import subprocess
 import sys
@@ -2990,7 +3060,10 @@ PY
 }
 
 infer_project_from_local_link() {
-  local local_link="$PWD/.twf/project.yml"
+  local local_link="$PWD/.oo/workflow.yaml"
+  if [[ ! -e "$local_link" ]]; then
+    local_link="$PWD/.oo/workflow.yml"
+  fi
   [[ -e "$local_link" ]] || {
     echo ""
     return 0
@@ -3004,7 +3077,7 @@ print(os.path.realpath(sys.argv[1]))
 PY
   )"
 
-  if [[ "$resolved" == */project.yml ]]; then
+  if [[ "$resolved" == */workflow.yaml || "$resolved" == */workflow.yml ]]; then
     basename "$(dirname "$resolved")"
     return 0
   fi
@@ -3030,7 +3103,7 @@ infer_start_project_from_context() {
     return 0
   fi
 
-  if [[ -f "$(project_template_file "$repo" "$cwd_name")" ]]; then
+  if [[ -f "$(resolve_project_template_file "$repo" "$cwd_name")" ]]; then
     echo "$cwd_name"
     return 0
   fi
@@ -3059,17 +3132,17 @@ cmd_start() {
 
   if [[ $# -eq 0 || "${1:-}" == -* ]]; then
     if [[ "${1:-}" == "--project" ]]; then
-      error "Invalid option for twf start: --project"
-      info "Usage: twf start <project-name> [tmuxinator args...] [--strict]"
-      info "Tip: use 'twf start test-repo' or run from that repo and use 'twf start'"
+      error "Invalid option for oo start: --project"
+      info "Usage: oo start <project-name> [tmuxinator args...] [--strict]"
+      info "Tip: use 'oo start test-repo' or run from that repo and use 'oo start'"
       exit 1
     fi
 
     project_name="$(infer_start_project_from_context)"
     if [[ -z "$project_name" ]]; then
       error "Missing project name and could not infer one from current directory"
-      info "Usage: twf start <project-name> [tmuxinator args...] [--strict]"
-      info "Tip: run from your project repo and use 'twf start', or pass project explicitly"
+      info "Usage: oo start <project-name> [tmuxinator args...] [--strict]"
+      info "Tip: run from your project repo and use 'oo start', or pass project explicitly"
       exit 1
     fi
 
@@ -3098,7 +3171,7 @@ cmd_start() {
   local tmuxinator_status=0
   local had_session_before=false
 
-  echo "[twf] Project: $project_name"
+  echo "[oo] Project: $project_name"
 
   if tmux has-session -t "$project_name" 2>/dev/null; then
     had_session_before=true
@@ -3112,49 +3185,49 @@ cmd_start() {
   workflow_repo="$(detect_workflow_repo)"
   if [[ -z "$workflow_repo" ]]; then
     error "No team workflow root is configured"
-    info "Run: twf add $project_name"
+    info "Run: oo add $project_name"
     exit 1
   fi
 
   config_source_file="$(project_template_file "$workflow_repo" "$project_name")"
   if [[ ! -f "$config_source_file" ]]; then
     error "Project template not found for '$project_name': $config_source_file"
-    info "Add the project first with: twf add $project_name"
+    info "Add the project first with: oo add $project_name"
     exit 1
   fi
 
-  echo "[twf] Loading services..."
-  echo "[twf] Applying developer overrides..."
-  echo "[twf] Checking dependencies..."
+  echo "[oo] Loading services..."
+  echo "[oo] Applying developer overrides..."
+  echo "[oo] Checking dependencies..."
   report_service_readiness_for_start "$workflow_repo" "$project_name"
 
   if [[ ${#START_MISSING_SERVICES[@]-0} -gt 0 || ${#START_TIMEOUT_SERVICES[@]-0} -gt 0 || ${#START_FAILED_SERVICES[@]-0} -gt 0 ]]; then
     echo
     local inferred_project
     inferred_project="$(infer_start_project_from_context)"
-    local install_cmd="twf install --project $project_name"
-    local doctor_cmd="twf doctor --project $project_name"
+    local install_cmd="oo install --project $project_name"
+    local doctor_cmd="oo doctor --project $project_name"
     if [[ "$inferred_project" == "$project_name" ]]; then
-      install_cmd="twf install"
-      doctor_cmd="twf doctor"
+      install_cmd="oo install"
+      doctor_cmd="oo doctor"
     fi
 
     if [[ "$strict_mode" == true ]]; then
-      error_block "RUN-022" "Start blocked" "Strict mode requires a fully prepared environment, but setup is incomplete." --context "Project: $project_name" "Install environment: $install_cmd" "Check status: $doctor_cmd" "Retry (strict): twf start --strict"
+      error_block "RUN-022" "Start blocked" "Strict mode requires a fully prepared environment, but setup is incomplete." --context "Project: $project_name" "Install environment: $install_cmd" "Check status: $doctor_cmd" "Retry (strict): oo start --strict"
       return 1
     fi
 
     if [[ ${#START_MISSING_SERVICES[@]-0} -gt 0 ]]; then
-      echo "[twf] Run: $install_cmd"
+      echo "[oo] Run: $install_cmd"
     fi
     if [[ ${#START_TIMEOUT_SERVICES[@]-0} -gt 0 || ${#START_FAILED_SERVICES[@]-0} -gt 0 ]]; then
-      echo "[twf] Run: $doctor_cmd"
+      echo "[oo] Run: $doctor_cmd"
     fi
     warn "RUN-012 Runtime may be degraded because environment setup is incomplete"
   fi
 
   config_override_file="$(project_override_file "$workflow_repo" "$project_name")"
-  rendered_config_file="$(mktemp "${TMPDIR:-/tmp}/twf-${project_name}-XXXXXX")"
+  rendered_config_file="$(mktemp "${TMPDIR:-/tmp}/oo-${project_name}-XXXXXX")"
 
   if ! render_project_config_for_start "$config_source_file" "$config_override_file" "$rendered_config_file"; then
     rm -f "$rendered_config_file"
@@ -3169,7 +3242,7 @@ cmd_start() {
   fi
 
   sanitize_tmux_env
-  echo "[twf] Starting workflow..."
+  echo "[oo] Starting workflow..."
   set +e
   (
     cd "$workflow_repo"
@@ -3203,7 +3276,7 @@ cmd_stop() {
     project_name="$(infer_start_project_from_context)"
     if [[ -z "$project_name" ]]; then
       error "Missing project name"
-      info "Usage: twf stop <project-name>"
+      info "Usage: oo stop <project-name>"
       exit 1
     fi
     info "No project name provided; inferred '$project_name'"
@@ -3233,24 +3306,24 @@ cmd_uninstall() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: twf uninstall [--yes]
+Usage: oo uninstall [--yes]
 
-Removes global twf CLI installation (symlink and install root).
+Removes global oo CLI installation (symlink and install root).
 This does not remove tmuxinator project aliases.
 EOF
       return 0
       ;;
     *)
       error "Unknown option for uninstall: $arg"
-      info "Usage: twf uninstall [--yes]"
+      info "Usage: oo uninstall [--yes]"
       exit 1
       ;;
     esac
   done
 
-  local bin_dir="${TWF_BIN_DIR:-$DEFAULT_TWF_BIN_DIR}"
-  local install_root="${TWF_INSTALL_ROOT:-$DEFAULT_TWF_HOME}"
-  local symlink_path="$bin_dir/twf"
+  local bin_dir="${OO_BIN_DIR:-$DEFAULT_OO_BIN_DIR}"
+  local install_root="${OO_INSTALL_ROOT:-$DEFAULT_OO_HOME}"
+  local symlink_path="$bin_dir/oo"
 
   if [[ -L "$symlink_path" || -f "$symlink_path" ]]; then
     rm -f "$symlink_path"
@@ -3265,12 +3338,12 @@ EOF
   fi
 
   local can_remove_root=false
-  if [[ -f "$install_root/twf" && -f "$install_root/scripts/bootstrap.sh" ]]; then
+  if [[ -f "$install_root/oo" && -f "$install_root/scripts/bootstrap.sh" ]]; then
     can_remove_root=true
   fi
 
   if [[ "$can_remove_root" != true ]]; then
-    warn "Install root does not look like a twf install: $install_root"
+    warn "Install root does not look like a oo install: $install_root"
     warn "Skipping removal for safety"
     return 0
   fi
@@ -3347,7 +3420,7 @@ main() {
     local suggestion
     suggestion="$(closest_command "$command")"
     if [[ -n "$suggestion" ]]; then
-      info "Did you mean: twf $suggestion"
+      info "Did you mean: oo $suggestion"
     fi
     usage_quick
     exit 1

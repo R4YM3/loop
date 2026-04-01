@@ -7,7 +7,7 @@ setup() {
   configure_workflow_root "$TEAM_ROOT"
 }
 
-@test "twf add auto-detects workspace mode from direct child repos" {
+@test "oo add auto-detects workspace mode from direct child repos" {
   local ws="$TEST_ROOT/workspace"
   local frontend="$ws/frontend"
   local api="$ws/api"

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TWF_REPO_URL="${TWF_REPO_URL:-https://github.com/R4YM3/tmuxinator-team-workflows.git}"
-TWF_INSTALL_ROOT="${TWF_INSTALL_ROOT:-$HOME/.local/share/twf}"
-TWF_BIN_DIR="${TWF_BIN_DIR:-$HOME/.local/bin}"
+OO_REPO_URL="${OO_REPO_URL:-https://github.com/R4YM3/tmuxinator-team-workflows.git}"
+OO_INSTALL_ROOT="${OO_INSTALL_ROOT:-$HOME/.local/share/oo}"
+OO_BIN_DIR="${OO_BIN_DIR:-$HOME/.local/bin}"
 
 ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
 info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
@@ -89,7 +89,7 @@ ensure_required_dependencies() {
   fi
 
   warn "Missing required dependencies: ${missing[*]}"
-  info "twf requires both tmux and tmuxinator."
+  info "oo requires both tmux and tmuxinator."
 
   if ! can_prompt_user; then
     error "Cannot prompt for dependency installation in this shell"
@@ -145,8 +145,8 @@ detect_shell_rc_files() {
 ensure_path_block_in_file() {
   local bin_dir="$1"
   local rc_file="$2"
-  local start_marker="# >>> twf path >>>"
-  local end_marker="# <<< twf path <<<"
+  local start_marker="# >>> oo path >>>"
+  local end_marker="# <<< oo path <<<"
 
   mkdir -p "$(dirname "$rc_file")"
   [[ -f "$rc_file" ]] || touch "$rc_file"
@@ -172,7 +172,7 @@ ensure_path_block_in_file() {
     } >>"$rc_file"
   fi
 
-  ok "Added twf PATH block to $rc_file"
+  ok "Added oo PATH block to $rc_file"
 }
 
 ensure_path_persisted() {
@@ -195,10 +195,10 @@ ensure_path_persisted() {
   done
 }
 
-if [[ -z "$TWF_REPO_URL" ]]; then
-  error "TWF_REPO_URL is empty."
-  info "Set TWF_REPO_URL and rerun, for example:"
-  echo "  TWF_REPO_URL='https://github.com/R4YM3/tmuxinator-team-workflows.git' bash scripts/bootstrap.sh"
+if [[ -z "$OO_REPO_URL" ]]; then
+  error "OO_REPO_URL is empty."
+  info "Set OO_REPO_URL and rerun, for example:"
+  echo "  OO_REPO_URL='https://github.com/R4YM3/tmuxinator-team-workflows.git' bash scripts/bootstrap.sh"
   exit 1
 fi
 
@@ -209,38 +209,38 @@ fi
 
 ensure_required_dependencies || exit 1
 
-mkdir -p "$(dirname "$TWF_INSTALL_ROOT")"
+mkdir -p "$(dirname "$OO_INSTALL_ROOT")"
 
-if [[ -d "$TWF_INSTALL_ROOT/.git" ]]; then
-  info "Updating existing installation at $TWF_INSTALL_ROOT"
-  git -C "$TWF_INSTALL_ROOT" pull --ff-only
-elif [[ -e "$TWF_INSTALL_ROOT" ]]; then
-  error "Install root exists and is not a git checkout: $TWF_INSTALL_ROOT"
-  info "Remove it manually or choose another location with TWF_INSTALL_ROOT"
+if [[ -d "$OO_INSTALL_ROOT/.git" ]]; then
+  info "Updating existing installation at $OO_INSTALL_ROOT"
+  git -C "$OO_INSTALL_ROOT" pull --ff-only
+elif [[ -e "$OO_INSTALL_ROOT" ]]; then
+  error "Install root exists and is not a git checkout: $OO_INSTALL_ROOT"
+  info "Remove it manually or choose another location with OO_INSTALL_ROOT"
   exit 1
 else
-  info "Cloning twf repository into $TWF_INSTALL_ROOT"
-  git clone "$TWF_REPO_URL" "$TWF_INSTALL_ROOT"
+  info "Cloning oo repository into $OO_INSTALL_ROOT"
+  git clone "$OO_REPO_URL" "$OO_INSTALL_ROOT"
 fi
 
 info "Ensuring latest runtime revision"
-git -C "$TWF_INSTALL_ROOT" pull --ff-only
+git -C "$OO_INSTALL_ROOT" pull --ff-only
 
-mkdir -p "$TWF_BIN_DIR"
-ln -sfn "$TWF_INSTALL_ROOT/twf" "$TWF_BIN_DIR/twf"
-chmod +x "$TWF_INSTALL_ROOT/twf"
-ok "Installed CLI symlink: $TWF_BIN_DIR/twf"
+mkdir -p "$OO_BIN_DIR"
+ln -sfn "$OO_INSTALL_ROOT/oo" "$OO_BIN_DIR/oo"
+chmod +x "$OO_INSTALL_ROOT/oo"
+ok "Installed CLI symlink: $OO_BIN_DIR/oo"
 
-ensure_path_persisted "$TWF_BIN_DIR"
+ensure_path_persisted "$OO_BIN_DIR"
 
 case ":$PATH:" in
-*":$TWF_BIN_DIR:"*)
-  ok "$TWF_BIN_DIR is on PATH"
+*":$OO_BIN_DIR:"*)
+  ok "$OO_BIN_DIR is on PATH"
   ;;
 *)
-  warn "$TWF_BIN_DIR is not on PATH"
+  warn "$OO_BIN_DIR is not on PATH"
   info "Add this line to your shell rc file:"
-  printf '  export PATH="%s:$PATH"\n' "$TWF_BIN_DIR"
+  printf '  export PATH="%s:$PATH"\n' "$OO_BIN_DIR"
   ;;
 esac
 
@@ -249,6 +249,6 @@ echo
 info "Next steps:"
 echo "  exec \"\$SHELL\" -l"
 echo "  cd /path/to/your/codebase"
-echo "  twf add"
-echo "  twf install"
-echo "  twf start"
+echo "  oo add"
+echo "  oo install"
+echo "  oo start"

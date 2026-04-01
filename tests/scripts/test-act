@@ -51,8 +51,8 @@ tests/scripts/test-flow
 echo "[run] tests/scripts/test-services"
 tests/scripts/test-services
 
-if [[ "${TWF_SKIP_DOCKER:-0}" == "1" ]]; then
-  echo "[info] skipping docker integration (TWF_SKIP_DOCKER=1)"
+if [[ "${OO_SKIP_DOCKER:-0}" == "1" ]]; then
+  echo "[info] skipping docker integration (OO_SKIP_DOCKER=1)"
 else
   echo "[run] tests/scripts/test-docker"
   tests/scripts/test-docker

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 RUNTIME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORKFLOW_REPO_DIR="${TWF_WORKFLOW_REPO:-}"
+WORKFLOW_REPO_DIR="${OO_WORKFLOW_REPO:-}"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 TMUXINATOR_DIR="$CONFIG_HOME/tmuxinator"
 
@@ -11,7 +11,7 @@ warn() { printf "\033[1;33m[warn]\033[0m %s\n" "$1"; }
 error() { printf "\033[1;31m[error]\033[0m %s\n" "$1"; }
 
 [[ -n "$WORKFLOW_REPO_DIR" ]] || {
-  error "TWF_WORKFLOW_REPO is required"
+  error "OO_WORKFLOW_REPO is required"
   exit 1
 }
 
@@ -38,8 +38,13 @@ shopt -u nullglob
 project_files=()
 for dir in "${project_dirs[@]}"; do
   [[ -d "$dir" ]] || continue
-  [[ -f "$dir/project.yml" ]] || continue
-  project_files+=("$dir/project.yml")
+  if [[ -f "$dir/workflow.yaml" ]]; then
+    project_files+=("$dir/workflow.yaml")
+    continue
+  fi
+  if [[ -f "$dir/workflow.yml" ]]; then
+    project_files+=("$dir/workflow.yml")
+  fi
 done
 
 if [[ ${#project_files[@]} -eq 0 ]]; then
@@ -72,4 +77,4 @@ for project_file in "${project_files[@]}"; do
   fi
 done
 
-TWF_WORKFLOW_REPO="$WORKFLOW_REPO_DIR" bash "$RUNTIME_DIR/scripts/validate-workflows.sh"
+OO_WORKFLOW_REPO="$WORKFLOW_REPO_DIR" bash "$RUNTIME_DIR/scripts/validate-workflows.sh"

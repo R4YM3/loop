@@ -2,7 +2,7 @@
 * text=auto
 
 # Shell entrypoints and scripts must stay LF for Unix execution
-twf text eol=lf
+oo text eol=lf
 *.sh text eol=lf
 *.bash text eol=lf
 *.bats text eol=lf

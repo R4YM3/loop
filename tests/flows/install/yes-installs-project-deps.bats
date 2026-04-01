@@ -13,14 +13,14 @@ setup() {
   run_twf add
   [ "$status" -eq 0 ]
 
-  cat >"$TEAM_ROOT/install-project/developer.yml" <<'EOF'
+  cat >"$TEAM_ROOT/install-project/override.yaml" <<'EOF'
 services:
   enabled: []
   config: {}
 EOF
 }
 
-@test "twf install --yes installs project dependencies" {
+@test "oo install --yes installs project dependencies" {
   local mock_bin="$TEST_ROOT/bin"
   create_mock_command "$mock_bin" "npm" 'touch "$TEST_ROOT/npm.called"'
 

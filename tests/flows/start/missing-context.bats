@@ -5,7 +5,7 @@ setup() {
   setup_test_env
 }
 
-@test "twf start fails when project cannot be inferred" {
+@test "oo start fails when project cannot be inferred" {
   mkdir -p "$TEST_ROOT/random-dir"
   cd "$TEST_ROOT/random-dir"
 

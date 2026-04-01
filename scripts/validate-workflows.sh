@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKFLOW_REPO_DIR="${TWF_WORKFLOW_REPO:-}"
+WORKFLOW_REPO_DIR="${OO_WORKFLOW_REPO:-}"
 
 [[ -n "$WORKFLOW_REPO_DIR" ]] || {
-  echo "[error] TWF_WORKFLOW_REPO is required" >&2
+  echo "[error] OO_WORKFLOW_REPO is required" >&2
   exit 1
 }
 
@@ -20,7 +20,7 @@ shopt -u nullglob
 project_count=0
 for dir in "${project_dirs[@]}"; do
   [[ -d "$dir" ]] || continue
-  [[ -f "$dir/project.yml" ]] || continue
+  [[ -f "$dir/workflow.yaml" || -f "$dir/workflow.yml" ]] || continue
   project_count=$((project_count + 1))
 done
 
@@ -33,8 +33,14 @@ echo "[info] Validating $project_count workflow project(s)..."
 
 for dir in "${project_dirs[@]}"; do
   [[ -d "$dir" ]] || continue
-  project_file="$dir/project.yml"
-  override_file="$dir/developer.yml"
+  project_file="$dir/workflow.yaml"
+  override_file="$dir/override.yaml"
+  if [[ ! -f "$project_file" ]]; then
+    project_file="$dir/workflow.yml"
+  fi
+  if [[ ! -f "$override_file" ]]; then
+    override_file="$dir/override.yml"
+  fi
   [[ -f "$project_file" ]] || continue
 
   if ! ruby -rerb -ryaml -e 'def load_yaml(path); rendered = ERB.new(File.read(path), trim_mode: "-").result(binding); data = YAML.safe_load(rendered, aliases: true); raise "Top-level YAML must be a map" unless data.is_a?(Hash); end; load_yaml(ARGV[0]); if File.exist?(ARGV[1]); load_yaml(ARGV[1]); end' "$project_file" "$override_file"; then

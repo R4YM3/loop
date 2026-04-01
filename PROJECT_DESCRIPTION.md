@@ -1,8 +1,8 @@
-# twf Project Description
+# Loop Project Description
 
 ## Product Summary
 
-`twf` is a terminal-first CLI for defining and running team development workflows.
+`oo` (Loop) is a terminal-first CLI for defining and running team development workflows.
 
 It is used to:
 
@@ -34,52 +34,52 @@ curl -fsSL "https://raw.githubusercontent.com/R4YM3/tmuxinator-team-workflows/ma
 
 What install does (high level):
 
-- installs/updates `twf` runtime locally,
-- creates CLI symlink (`twf`) in user bin path,
-- ensures shell can resolve `twf`,
+- installs/updates `oo` runtime locally,
+- creates CLI symlink (`oo`) in user bin path,
+- ensures shell can resolve `oo`,
 - prepares baseline prerequisites for using the CLI.
 
 Verify install:
 
 ```bash
-twf version
-twf help
+oo version
+oo help
 ```
 
 Uninstall:
 
 ```bash
-twf uninstall
+oo uninstall
 ```
 
 ## CLI Surface
 
 Top-level commands:
 
-- `twf add [project-name] [--dry-run] [--no-install]`
-- `twf remove <project-name> [--yes]`
-- `twf install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]`
-- `twf service add <service> [--project <project>]`
-- `twf service remove <service> [--project <project>]`
-- `twf service list [--project <project> | --global]`
-- `twf service install [--project <project>] [--yes] | --global [--yes]`
-- `twf start <project> [args...] [--strict]`
-- `twf stop <project>`
-- `twf status`
-- `twf doctor [--project <project> | --global] [--fix] [--yes] [--verbose]`
-- `twf validate`
-- `twf list`
-- `twf demo [target-dir]`
-- `twf update`
-- `twf uninstall [--yes]`
-- `twf version`
-- `twf help`
+- `oo add [project-name] [--dry-run] [--no-install]`
+- `oo remove <project-name> [--yes]`
+- `oo install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]`
+- `oo service add <service> [--project <project>]`
+- `oo service remove <service> [--project <project>]`
+- `oo service list [--project <project> | --global]`
+- `oo service install [--project <project>] [--yes] | --global [--yes]`
+- `oo start <project> [args...] [--strict]`
+- `oo stop <project>`
+- `oo status`
+- `oo doctor [--project <project> | --global] [--fix] [--yes] [--verbose]`
+- `oo validate`
+- `oo list`
+- `oo demo [target-dir]`
+- `oo update`
+- `oo uninstall [--yes]`
+- `oo version`
+- `oo help`
 
 Most commands can infer project context when run inside a linked repository.
 
 ## Output and Return Behavior
 
-`twf` uses concise CLI output with a calm default mode.
+`oo` uses concise CLI output with a calm default mode.
 
 Default symbols:
 
@@ -111,19 +111,19 @@ Exit behavior:
 
 Examples:
 
-- `twf add`
+- `oo add`
   - creates config and links,
   - can run setup immediately,
   - supports skipping setup with `--no-install`
-- `twf install`
+- `oo install`
   - installs required environment setup,
   - installs project dependencies,
   - supports `--plan` preview mode
-- `twf start`
+- `oo start`
   - starts workflow,
   - warns in non-strict mode when setup is incomplete,
   - fails in strict mode with code `RUN-022`
-- `twf doctor`
+- `oo doctor`
   - prints grouped diagnostics (`Environment`, `Project`, result)
   - defaults to collapsed healthy output
   - supports `--verbose` for expanded checks
@@ -132,33 +132,33 @@ Examples:
 
 ### Flow A: First-Time Setup
 
-1. `twf add`
-2. setup runs automatically in interactive mode (or run `twf install`)
-3. `twf start`
+1. `oo add`
+2. setup runs automatically in interactive mode (or run `oo install`)
+3. `oo start`
 
 ### Flow B: Controlled Setup
 
-1. `twf add --dry-run`
-2. `twf add`
-3. `twf install --project <name>`
-4. `twf doctor`
-5. `twf start <name>`
+1. `oo add --dry-run`
+2. `oo add`
+3. `oo install --project <name>`
+4. `oo doctor`
+5. `oo start <name>`
 
 ### Flow C: Non-Interactive Setup
 
-1. `twf add`
-2. `twf install --yes`
-3. `twf start`
+1. `oo add`
+2. `oo install --yes`
+3. `oo start`
 
 ### Flow D: Existing Project Service Update
 
-1. `twf service add redis`
-2. `twf install` (or `twf service install`)
-3. `twf start`
+1. `oo service add redis`
+2. `oo install` (or `oo service install`)
+3. `oo start`
 
 ## Install Behavior Details
 
-`twf install` does both:
+`oo install` does both:
 
 1. machine readiness requirements
 2. project dependencies
@@ -179,8 +179,8 @@ Project dependency installers are detected from project root:
 
 ## Runtime and Readiness Behavior
 
-- `twf` tracks per-project service install state/version/config hash.
-- `twf start` checks readiness before starting.
+- `oo` tracks per-project service install state/version/config hash.
+- `oo start` checks readiness before starting.
 - Non-strict mode:
   - warns when requirements are missing,
   - still starts runtime.
@@ -189,30 +189,30 @@ Project dependency installers are detected from project root:
 
 ## Config and Workspace Model
 
-`twf` separates shared and personal config:
+`oo` separates shared and personal config:
 
-- `.twf/project.yml`
-- `.twf/developer.yml`
+- `.oo/workflow.yaml`
+- `.oo/override.yaml`
 
 Workflow root stores per-project config:
 
-- `<team-workflows-root>/<project>/project.yml`
-- `<team-workflows-root>/<project>/developer.yml`
+- `<team-workflows-root>/<project>/workflow.yaml`
+- `<team-workflows-root>/<project>/override.yaml`
 
 Workspace mode:
 
-- if `twf add` runs in a directory with multiple direct child codebases, it can create one workspace workflow automatically.
+- if `oo add` runs in a directory with multiple direct child codebases, it can create one workspace workflow automatically.
 
 ## Responsibility Boundaries
 
-`twf` is responsible for:
+`oo` is responsible for:
 
 - project/workspace detection,
 - service selection/management,
 - requirements intent,
 - install/start UX and diagnostics.
 
-`twf` is not:
+`oo` is not:
 
 - a deployment tool,
 - a production orchestrator,

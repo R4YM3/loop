@@ -55,19 +55,19 @@ run_docker=false
 while IFS= read -r path; do
   [[ -n "$path" ]] || continue
   case "$path" in
-  twf | scripts/* | examples/* | tests/flows/* | tests/helpers/* | tests/scripts/test-flow)
+  oo | scripts/* | examples/* | tests/flows/* | tests/helpers/* | tests/scripts/test-flow)
     run_flow=true
     ;;
   esac
 
   case "$path" in
-  twf | services/* | tests/services/* | tests/helpers/service_contract.bash | tests/scripts/test-services)
+  oo | services/* | tests/services/* | tests/helpers/service_contract.bash | tests/scripts/test-services)
     run_services=true
     ;;
   esac
 
   case "$path" in
-  twf | tests/integration/docker/* | tests/helpers/common.bash | tests/scripts/test-docker)
+  oo | tests/integration/docker/* | tests/helpers/common.bash | tests/scripts/test-docker)
     run_docker=true
     ;;
   esac

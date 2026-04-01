@@ -17,7 +17,7 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "twf start --strict fails when service is not ready" {
+@test "oo start --strict fails when service is not ready" {
   cd "$TEST_ROOT/repos/strict-project"
 
   run_twf start --strict --no-attach

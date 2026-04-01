@@ -7,7 +7,7 @@ setup() {
   configure_workflow_root "$TEAM_ROOT"
 }
 
-@test "twf add --dry-run writes nothing" {
+@test "oo add --dry-run writes nothing" {
   local repo="$TEST_ROOT/repos/dry-repo"
   create_git_repo "$repo"
   touch "$repo/package.json"
@@ -17,6 +17,6 @@ setup() {
   [ "$status" -eq 0 ]
   assert_output_contains "Dry run: no files were written"
 
-  [ ! -e "$TEAM_ROOT/dry-repo/project.yml" ]
+  [ ! -e "$TEAM_ROOT/dry-repo/workflow.yaml" ]
   [ ! -e "$XDG_CONFIG_HOME/tmuxinator/dry-repo.yml" ]
 }

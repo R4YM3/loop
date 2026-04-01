@@ -26,7 +26,7 @@ jobs:
         with:
           filters: |
             wsl:
-              - 'twf'
+              - 'oo'
               - 'scripts/**'
               - '.github/workflows/wsl-smoke.yml'
 
@@ -65,13 +65,13 @@ jobs:
             $DistroName = $distros[0]
           }
 
-          "TWF_WSL_DISTRO=$DistroName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "OO_WSL_DISTRO=$DistroName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: WSL smoke checks
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $DistroName = $env:TWF_WSL_DISTRO
+          $DistroName = $env:OO_WSL_DISTRO
           $workspace = $env:GITHUB_WORKSPACE
 
           if ($workspace -notmatch '^([A-Za-z]):\\(.*)$') {
@@ -82,6 +82,6 @@ jobs:
           $rest = $Matches[2] -replace '\\', '/'
           $workspaceWsl = "/mnt/$drive/$rest"
 
-          wsl.exe -d $DistroName -- bash -lc "tr -d '\r' < '$workspaceWsl/twf' > '$workspaceWsl/twf.lf' && mv '$workspaceWsl/twf.lf' '$workspaceWsl/twf' && chmod +x '$workspaceWsl/twf'"
-          wsl.exe -d $DistroName -- bash -lc "cd '$workspaceWsl' && bash ./twf help"
-          wsl.exe -d $DistroName -- bash -lc "mkdir -p /tmp/twf-wsl-smoke && cd /tmp/twf-wsl-smoke && touch package.json && TEAM_WORKFLOWS_ROOT=/tmp/team-workflows bash '$workspaceWsl/twf' add wsl-smoke --dry-run"
+          wsl.exe -d $DistroName -- bash -lc "tr -d '\r' < '$workspaceWsl/oo' > '$workspaceWsl/oo.lf' && mv '$workspaceWsl/oo.lf' '$workspaceWsl/oo' && chmod +x '$workspaceWsl/oo'"
+          wsl.exe -d $DistroName -- bash -lc "cd '$workspaceWsl' && bash ./oo help"
+          wsl.exe -d $DistroName -- bash -lc "mkdir -p /tmp/oo-wsl-smoke && cd /tmp/oo-wsl-smoke && touch package.json && TEAM_WORKFLOWS_ROOT=/tmp/team-workflows bash '$workspaceWsl/oo' add wsl-smoke --dry-run"

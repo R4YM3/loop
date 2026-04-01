@@ -14,13 +14,13 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "twf service add infers current project when --project is omitted" {
+@test "oo service add infers current project when --project is omitted" {
   cd "$TEST_ROOT/repos/service-project"
 
   run_twf service add redis
   [ "$status" -eq 0 ]
   assert_output_contains "inferred 'service-project'"
 
-  run grep -q -- "- redis" "$TEAM_ROOT/service-project/developer.yml"
+  run grep -q -- "- redis" "$TEAM_ROOT/service-project/override.yaml"
   [ "$status" -eq 0 ]
 }

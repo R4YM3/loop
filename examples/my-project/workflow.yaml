@@ -18,7 +18,7 @@ windows:
         - editor: 'nvim'
         - server: 'npm run server || zsh -l'
 
-  - twf:
-      root: ./.twf
+  - oo:
+      root: ./.oo
       panes:
         - 'nvim || zsh -l'

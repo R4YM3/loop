@@ -14,7 +14,7 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "twf status shows running sessions section and project health" {
+@test "oo status shows running sessions section and project health" {
   run_twf status
   [ "$status" -eq 0 ]
   assert_output_contains "Running project sessions"

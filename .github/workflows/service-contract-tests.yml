@@ -26,7 +26,7 @@ jobs:
         with:
           filters: |
             services:
-              - 'twf'
+              - 'oo'
               - 'services/**'
               - 'tests/services/**'
               - 'tests/helpers/service_contract.bash'

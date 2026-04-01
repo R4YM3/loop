@@ -191,8 +191,8 @@ What you can do
 Loop separates shared and personal configuration:
 
 ```text
-.oo/project.yml     # team defaults
-.oo/developer.yml   # personal overrides
+.oo/workflow.yaml     # team defaults
+.oo/override.yaml   # personal overrides
 ```
 
 This gives teams consistency while preserving safe local customization.
@@ -208,8 +208,8 @@ Workflows live in a central root and are linked into local repositories:
 ```text
 <team-workflows-root>/
 ├── project-a/
-│   ├── project.yml
-│   └── developer.yml
+│   ├── workflow.yaml
+│   └── override.yaml
 ```
 
 ## Dependency detection

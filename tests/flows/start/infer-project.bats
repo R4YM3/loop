@@ -14,12 +14,12 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "twf start infers project from local .twf link" {
+@test "oo start infers project from local .oo link" {
   local repo="$TEST_ROOT/repos/infer-project"
   cd "$repo"
 
   run_twf start --no-attach
   [ "$status" -eq 0 ]
-  assert_output_contains "[twf] Project: infer-project"
+  assert_output_contains "[oo] Project: infer-project"
   assert_output_contains "✔ Session started"
 }

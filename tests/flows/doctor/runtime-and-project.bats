@@ -14,7 +14,7 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "twf doctor shows runtime diagnostics and inferred project checks" {
+@test "oo doctor shows runtime diagnostics and inferred project checks" {
   cd "$TEST_ROOT/repos/doctor-project"
 
   run_twf doctor
