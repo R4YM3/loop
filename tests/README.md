@@ -11,7 +11,21 @@ tests/scripts/test-services
 tests/scripts/test-docker
 tests/scripts/test-all
 tests/scripts/test-changed
+tests/scripts/test-act
 ```
+
+## Run GitHub workflows locally with act
+
+```bash
+brew install act
+tests/scripts/test-act
+```
+
+- `test-act` runs Linux workflows that map to GitHub Actions CI:
+  - `.github/workflows/flow-tests.yml`
+  - `.github/workflows/service-contract-tests.yml`
+  - `.github/workflows/docker-integration-tests.yml`
+- `wsl-smoke` is `windows-latest` and is not run via `act`.
 
 ## Structure
 

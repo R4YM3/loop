@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+EVENT_FILE="$ROOT_DIR/.github/act/push-main.json"
+
+if ! command -v act >/dev/null 2>&1; then
+  echo "[error] act is required. Install it with: brew install act" >&2
+  exit 1
+fi
+
+if [[ ! -f "$EVENT_FILE" ]]; then
+  echo "[error] Missing event file: $EVENT_FILE" >&2
+  exit 1
+fi
+
+run_workflow() {
+  local workflow="$1"
+  echo "[run] act push -W $workflow"
+  act push -W "$workflow" -e "$EVENT_FILE"
+}
+
+cd "$ROOT_DIR"
+run_workflow ".github/workflows/flow-tests.yml"
+run_workflow ".github/workflows/service-contract-tests.yml"
+run_workflow ".github/workflows/docker-integration-tests.yml"
+
+echo "[info] WSL smoke workflow is windows-latest and is not run via act."
