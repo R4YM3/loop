@@ -96,6 +96,14 @@ Failure blocks include:
 - `Reason`
 - `What you can do`
 
+Suggested code domains:
+
+- `RUN` runtime/start flows
+- `INS` install flows
+- `ENV` environment issues
+- `CFG` configuration issues
+- `SYS` internal/system issues
+
 Exit behavior:
 
 - `0` on success

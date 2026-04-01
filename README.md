@@ -120,6 +120,14 @@ Most commands infer the current project when run inside a linked repository.
 
 When a command fails, `twf` prints a structured error block with a stable code, reason, and next actions.
 
+Error code groups:
+
+- `RUN-*` runtime/start issues
+- `INS-*` install issues
+- `ENV-*` environment state issues
+- `CFG-*` configuration issues
+- `SYS-*` internal/system issues
+
 Example:
 
 ```text

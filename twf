@@ -37,10 +37,21 @@ error_block() {
   local reason="$3"
   shift 3
 
+  local context_line=""
+  if [[ "${1:-}" == "--context" ]]; then
+    context_line="${2:-}"
+    shift 2
+  fi
+
   echo "✖ $title ($code)"
   echo
   echo "Reason"
   echo "  $reason"
+  if [[ -n "$context_line" ]]; then
+    echo
+    echo "Context"
+    echo "  $context_line"
+  fi
   echo
   echo "What you can do"
   local step
@@ -2942,25 +2953,25 @@ cmd_start() {
     echo
     local inferred_project
     inferred_project="$(infer_start_project_from_context)"
-    if [[ ${#START_MISSING_SERVICES[@]-0} -gt 0 ]]; then
-      if [[ "$inferred_project" == "$project_name" ]]; then
-        echo "[twf] Run: twf install"
-      else
-        echo "[twf] Run: twf install --project $project_name"
-      fi
+    local install_cmd="twf install --project $project_name"
+    local doctor_cmd="twf doctor --project $project_name"
+    if [[ "$inferred_project" == "$project_name" ]]; then
+      install_cmd="twf install"
+      doctor_cmd="twf doctor"
     fi
-    if [[ ${#START_TIMEOUT_SERVICES[@]-0} -gt 0 || ${#START_FAILED_SERVICES[@]-0} -gt 0 ]]; then
-      if [[ "$inferred_project" == "$project_name" ]]; then
-        echo "[twf] Run: twf doctor"
-      else
-        echo "[twf] Run: twf doctor --project $project_name"
-      fi
-    fi
+
     if [[ "$strict_mode" == true ]]; then
-      error_block "RUN-022" "Start blocked" "Strict mode is enabled and required environment setup is incomplete." "Run: twf install" "Check status: twf doctor" "Retry (strict): twf start --strict"
+      error_block "RUN-022" "Start blocked" "Strict mode requires a fully prepared environment, but setup is incomplete." --context "Project: $project_name" "Install environment: $install_cmd" "Check status: $doctor_cmd" "Retry (strict): twf start --strict"
       return 1
     fi
-    warn "RUN-012 Runtime may be degraded until environment setup is complete"
+
+    if [[ ${#START_MISSING_SERVICES[@]-0} -gt 0 ]]; then
+      echo "[twf] Run: $install_cmd"
+    fi
+    if [[ ${#START_TIMEOUT_SERVICES[@]-0} -gt 0 || ${#START_FAILED_SERVICES[@]-0} -gt 0 ]]; then
+      echo "[twf] Run: $doctor_cmd"
+    fi
+    warn "RUN-012 Runtime may be degraded because environment setup is incomplete"
   fi
 
   config_override_file="$(project_override_file "$workflow_repo" "$project_name")"
