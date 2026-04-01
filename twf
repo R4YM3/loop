@@ -1447,7 +1447,12 @@ report_service_readiness_for_start() {
     set -e
 
     if [[ "$check_rc" -eq 0 ]]; then
-      printf '✔ %s -> ready\n' "$service"
+      if [[ "$state_ready" == true ]]; then
+        printf '✔ %s -> ready\n' "$service"
+      else
+        printf '⚠ %s -> not installed\n' "$service"
+        START_MISSING_SERVICES+=("$service")
+      fi
       continue
     fi
 
