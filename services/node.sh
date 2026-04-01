@@ -36,35 +36,26 @@ node_major_from_version() {
 
 check_service() {
   local missing=0
+  local nvm_version=""
+  local node_version=""
+  local npm_version=""
+
   if command -v nvm >/dev/null 2>&1; then
-    local nvm_version
     nvm_version="$(nvm --version 2>/dev/null || true)"
-    if [[ -n "$nvm_version" ]]; then
-      ok "nvm found ($nvm_version, required >= $REQUIRED_NVM_VERSION)"
-    else
-      ok "nvm found (required >= $REQUIRED_NVM_VERSION)"
-    fi
   elif nvm_installation_exists; then
-    ok "nvm installation found (required >= $REQUIRED_NVM_VERSION)"
+    nvm_version="installed"
   else
     warn "nvm missing (required >= $REQUIRED_NVM_VERSION)"
     missing=1
   fi
 
   if command -v node >/dev/null 2>&1; then
-    local node_version
     node_version="$(node --version 2>/dev/null || true)"
-    if [[ -n "$node_version" ]]; then
-      local node_major
-      node_major="$(node_major_from_version "$node_version")"
-      if [[ "$node_major" =~ ^[0-9]+$ ]] && [[ "$node_major" -ge "$REQUIRED_NODE_MAJOR" ]]; then
-        ok "node found ($node_version, required >= v$REQUIRED_NODE_MAJOR)"
-      else
-        warn "node version too old ($node_version, required >= v$REQUIRED_NODE_MAJOR)"
-        missing=1
-      fi
-    else
-      ok "node found (required >= v$REQUIRED_NODE_MAJOR)"
+    local node_major
+    node_major="$(node_major_from_version "$node_version")"
+    if [[ ! "$node_major" =~ ^[0-9]+$ ]] || [[ "$node_major" -lt "$REQUIRED_NODE_MAJOR" ]]; then
+      warn "node version too old (${node_version:-unknown}, required >= v$REQUIRED_NODE_MAJOR)"
+      missing=1
     fi
   else
     warn "node missing (required >= v$REQUIRED_NODE_MAJOR)"
@@ -72,19 +63,18 @@ check_service() {
   fi
 
   if command -v npm >/dev/null 2>&1; then
-    local npm_version
     npm_version="$(npm --version 2>/dev/null || true)"
-    if [[ -n "$npm_version" ]]; then
-      ok "npm found ($npm_version)"
-    else
-      ok "npm found"
-    fi
   else
     warn "npm missing"
     missing=1
   fi
 
-  [[ "$missing" -eq 0 ]]
+  if [[ "$missing" -eq 0 ]]; then
+    ok "node runtime ready (required >= v$REQUIRED_NODE_MAJOR, node ${node_version:-unknown}, npm ${npm_version:-unknown}, nvm ${nvm_version:-unknown})"
+    return 0
+  fi
+
+  return 1
 }
 
 install_nvm() {

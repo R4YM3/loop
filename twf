@@ -1558,6 +1558,7 @@ run_service_install_for_project() {
 report_service_readiness_for_start() {
   local repo="$1"
   local project_name="$2"
+  local adopt_detected="${3:-false}"
   local service=""
 
   START_MISSING_SERVICES=()
@@ -1588,6 +1589,9 @@ report_service_readiness_for_start() {
     if [[ "$check_rc" -eq 0 ]]; then
       if [[ "$state_ready" == true ]]; then
         printf '✔ %s -> ready\n' "$service"
+      elif [[ "$adopt_detected" == true ]]; then
+        write_service_state "$project_name" "$service" "$SERVICE_CTX_VERSION" "$SERVICE_CTX_CONFIG_HASH"
+        printf '✔ %s -> ready (detected on machine)\n' "$service"
       else
         printf '⚠ %s -> detected but not managed by twf\n' "$service"
         START_MISSING_SERVICES+=("$service")
@@ -2258,7 +2262,7 @@ EOF
   ensure_project_exists "$workflow_repo" "$project_name"
 
   echo "[plan] Install scope: machine readiness + project dependencies"
-  report_service_readiness_for_start "$workflow_repo" "$project_name"
+  report_service_readiness_for_start "$workflow_repo" "$project_name" true
   collect_install_candidates_for_project
 
   local selected_services=()
@@ -2305,11 +2309,6 @@ EOF
     fi
 
     install_selected_services_for_project "$workflow_repo" "$project_name" "$assume_yes" "${selected_services[@]}" || true
-  fi
-
-  report_service_readiness_for_start "$workflow_repo" "$project_name"
-  if [[ ${#START_MISSING_SERVICES[@]-0} -gt 0 || ${#START_TIMEOUT_SERVICES[@]-0} -gt 0 || ${#START_FAILED_SERVICES[@]-0} -gt 0 ]]; then
-    warn "Machine readiness is still incomplete; project runtime may be degraded"
   fi
 
   local project_root
