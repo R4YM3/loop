@@ -66,7 +66,7 @@ Top-level commands:
 - `twf start <project> [args...] [--strict]`
 - `twf stop <project>`
 - `twf status`
-- `twf doctor [--project <project> | --global] [--fix] [--yes]`
+- `twf doctor [--project <project> | --global] [--fix] [--yes] [--verbose]`
 - `twf validate`
 - `twf list`
 - `twf demo [target-dir]`
@@ -124,7 +124,9 @@ Examples:
   - warns in non-strict mode when setup is incomplete,
   - fails in strict mode with code `RUN-022`
 - `twf doctor`
-  - prints diagnostics and fix suggestions
+  - prints grouped diagnostics (`Environment`, `Project`, result)
+  - defaults to collapsed healthy output
+  - supports `--verbose` for expanded checks
 
 ## Main Developer Flows
 

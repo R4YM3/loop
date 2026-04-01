@@ -19,6 +19,7 @@ setup() {
 
   run_twf doctor
   [ "$status" -eq 0 ]
-  assert_output_contains "[twf doctor] Runtime"
-  assert_output_contains "- doctor-project"
+  assert_output_contains "◆ Doctor"
+  assert_output_contains "Project: doctor-project"
+  assert_output_contains "✓ System healthy"
 }

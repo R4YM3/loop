@@ -106,7 +106,7 @@ Most commands infer the current project when run inside a linked repository.
 - `twf start`
 - `twf stop`
 - `twf status`
-- `twf doctor`
+- `twf doctor [--verbose]`
 
 ## CLI Output Style
 
@@ -141,6 +141,14 @@ What you can do
   • Check status: twf doctor
   • Retry (strict): twf start --strict
 ```
+
+`twf doctor` default output is calm and grouped by intent:
+
+- `Environment`
+- `Project`
+- final result (`✓ System healthy`, `! Setup incomplete`, or `✖ Project not ready`)
+
+Use `twf doctor --verbose` to expand healthy checks line by line.
 
 ### Other
 

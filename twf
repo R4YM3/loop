@@ -1711,6 +1711,24 @@ service_ready_detail() {
   esac
 }
 
+service_display_name() {
+  local service="$1"
+  case "$service" in
+  node)
+    echo "Node.js"
+    ;;
+  api)
+    echo "API"
+    ;;
+  web)
+    echo "Web"
+    ;;
+  *)
+    echo "$service"
+    ;;
+  esac
+}
+
 join_by_comma() {
   local first=true
   local item
@@ -2113,6 +2131,8 @@ cmd_doctor() {
   local global_mode=false
   local fix_mode=false
   local assume_yes=false
+  local verbose_mode=false
+  local inferred_project=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2136,9 +2156,13 @@ cmd_doctor() {
       assume_yes=true
       shift
       ;;
+    --verbose)
+      verbose_mode=true
+      shift
+      ;;
     -h | --help)
       cat <<'EOF'
-Usage: twf doctor [--project <project> | --global] [--fix] [--yes]
+Usage: twf doctor [--project <project> | --global] [--fix] [--yes] [--verbose]
 
 Diagnoses runtime and service readiness.
 Use --fix to run safe automatic service installs.
@@ -2163,36 +2187,72 @@ EOF
   if [[ -z "$project_name" && "$global_mode" != true ]]; then
     project_name="$(infer_start_project_from_context)"
     if [[ -n "$project_name" ]]; then
-      info "No --project provided; inferred '$project_name'"
+      inferred_project=true
     fi
   fi
-
-  echo "[twf doctor] Running diagnostics"
-  echo
 
   local tmux_ok=false
   local tmuxinator_ok=false
   local ruby_ok=false
+  local issue_count=0
+  local env_issue_count=0
+  local project_issue_count=0
+  local env_ok_items=()
+  local env_missing_items=()
 
   command -v tmux >/dev/null 2>&1 && tmux_ok=true
   command -v tmuxinator >/dev/null 2>&1 && tmuxinator_ok=true
   command -v ruby >/dev/null 2>&1 && ruby_ok=true
 
-  echo "[twf doctor] Runtime"
-  [[ "$tmux_ok" == true ]] && echo "✔ tmux -> installed" || echo "⚠ tmux -> missing"
-  [[ "$tmuxinator_ok" == true ]] && echo "✔ tmuxinator -> installed" || echo "⚠ tmuxinator -> missing"
-  [[ "$ruby_ok" == true ]] && echo "✔ ruby -> installed" || echo "⚠ ruby -> missing"
+  [[ "$tmux_ok" == true ]] && env_ok_items+=("tmux") || env_missing_items+=("tmux")
+  [[ "$tmuxinator_ok" == true ]] && env_ok_items+=("tmuxinator") || env_missing_items+=("tmuxinator")
+  [[ "$ruby_ok" == true ]] && env_ok_items+=("ruby") || env_missing_items+=("ruby")
+
+  env_issue_count=${#env_missing_items[@]}
+  issue_count=$((issue_count + env_issue_count))
+
+  echo "◆ Doctor"
+  if [[ "$global_mode" == true ]]; then
+    echo "  Project: all"
+  elif [[ -n "$project_name" ]]; then
+    if [[ "$inferred_project" == true ]]; then
+      echo "  Project: $project_name (inferred)"
+    else
+      echo "  Project: $project_name"
+    fi
+  else
+    echo "  Project: none"
+  fi
+  echo
+
+  echo "Environment"
+  if [[ "$verbose_mode" != true && ${#env_missing_items[@]} -eq 0 ]]; then
+    echo "  ✓ All runtime tools available (tmux, tmuxinator, ruby)"
+  else
+    [[ "$tmux_ok" == true ]] && echo "  ✓ tmux installed" || echo "  ! tmux not installed"
+    [[ "$tmuxinator_ok" == true ]] && echo "  ✓ tmuxinator installed" || echo "  ! tmuxinator not installed"
+    [[ "$ruby_ok" == true ]] && echo "  ✓ ruby installed" || echo "  ! ruby not installed"
+  fi
   echo
 
   local projects=()
   local proj=""
+  local workflow_repo
+  workflow_repo="$(detect_workflow_repo)"
 
-  if [[ -z "$workflow_repo" ]]; then
-    warn "No team workflow root configured; skipping project diagnostics"
-    return 0
+  if [[ -z "$project_name" && "$global_mode" != true && -z "$workflow_repo" ]]; then
+    error "No project context found"
+    info "Run from a linked project repo, or pass --project <name> or --global"
+    exit 1
   fi
 
-  if [[ "$global_mode" == true ]]; then
+  echo "Project"
+
+  if [[ -z "$workflow_repo" ]]; then
+    echo "  ! Team workflow root is not configured"
+    issue_count=$((issue_count + 1))
+    project_issue_count=$((project_issue_count + 1))
+  elif [[ "$global_mode" == true ]]; then
     while IFS= read -r proj; do
       [[ -n "$proj" ]] || continue
       projects+=("$proj")
@@ -2200,30 +2260,28 @@ EOF
   elif [[ -n "$project_name" ]]; then
     validate_project_name "$project_name"
     projects+=("$project_name")
-  else
-    error "No project context found"
-    info "Run from a linked project repo, or pass --project <name> or --global"
-    exit 1
   fi
 
   local fix_candidates=()
-  local any_issue=false
   local project
 
-  echo "[twf doctor] Projects"
   for project in "${projects[@]}"; do
     ensure_project_exists "$workflow_repo" "$project"
-    echo "- $project"
 
     load_enabled_services_for_project "$workflow_repo" "$project"
     if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
-      echo "  - (no services configured)"
-      echo
+      if [[ "$global_mode" == true ]]; then
+        echo "  ✓ $project: no services configured"
+      else
+        echo "  ✓ No services configured"
+      fi
       continue
     fi
 
     local service
     local project_needs_fix=false
+    local project_ready_services=()
+    local project_issues=()
     for service in "${LOADED_PROJECT_SERVICES[@]}"; do
       require_service "$service"
       build_service_state_context "$workflow_repo" "$project" "$service"
@@ -2235,38 +2293,73 @@ EOF
       set -e
 
       if [[ "$check_rc" -eq 0 ]]; then
-        echo "  ✔ $service -> ready"
+        project_ready_services+=("$service")
       elif [[ "$check_rc" -eq 124 ]]; then
-        any_issue=true
         project_needs_fix=true
-        echo "  ⚠ $service -> check timed out (${SERVICE_CHECK_TIMEOUT_SEC}s)"
+        project_issues+=("$service timed out")
       else
-        any_issue=true
         project_needs_fix=true
-        echo "  ⚠ $service -> missing or not ready"
+        project_issues+=("$service not ready")
       fi
     done
 
     if [[ "$project_needs_fix" == true ]]; then
       fix_candidates+=("$project")
+      project_issue_count=$((project_issue_count + ${#project_issues[@]}))
+      issue_count=$((issue_count + ${#project_issues[@]}))
+      if [[ "$global_mode" == true ]]; then
+        echo "  ! $project: ${#project_issues[@]} issue(s)"
+      else
+        local issue
+        for issue in "${project_issues[@]}"; do
+          echo "  ! $issue"
+        done
+      fi
+    else
+      if [[ "$global_mode" == true ]]; then
+        echo "  ✓ $project: ready"
+      elif [[ "$verbose_mode" == true || ${#project_ready_services[@]} -le 2 ]]; then
+        local ready_service
+        for ready_service in "${project_ready_services[@]}"; do
+          echo "  ✓ $(service_display_name "$ready_service") ready"
+        done
+      else
+        echo "  ✓ All project services ready ($(join_by_comma "${project_ready_services[@]}"))"
+      fi
     fi
-
-    echo
   done
 
-  if [[ "$any_issue" == true ]]; then
-    echo "[twf doctor] Fix suggestions"
-    local seen=""
-    local p
-    for p in "${fix_candidates[@]}"; do
-      if [[ ",${seen}," != *",$p,"* ]]; then
-        echo "- twf service install --project $p"
-        seen="${seen},$p"
-      fi
-    done
-    echo "- twf doctor --project <project>"
+  echo
+  local install_cmd="twf install"
+  if [[ "$global_mode" == true ]]; then
+    install_cmd="twf install --project <project>"
+  elif [[ -n "$project_name" ]]; then
+    local inferred
+    inferred="$(infer_start_project_from_context)"
+    if [[ "$inferred" != "$project_name" ]]; then
+      install_cmd="twf install --project $project_name"
+    fi
+  fi
+
+  if [[ "$issue_count" -eq 0 ]]; then
+    echo "✓ System healthy"
+    echo "  No issues found"
+    if [[ "$global_mode" != true ]]; then
+      echo
+      echo "Next:"
+      echo "  twf start"
+    fi
   else
-    echo "[twf doctor] ✔ All checked services are ready"
+    if [[ "$env_issue_count" -gt 0 && "$project_issue_count" -gt 0 ]]; then
+      echo "✖ Project not ready (DOC-021)"
+    else
+      echo "! Setup incomplete"
+    fi
+    echo "  $issue_count issue(s) found"
+    echo
+    echo "What you can do"
+    echo "  • Install environment: $install_cmd"
+    echo "  • Re-check: twf doctor"
   fi
 
   if [[ "$fix_mode" == true && ${#fix_candidates[@]} -gt 0 ]]; then
