@@ -22,5 +22,6 @@ setup() {
 
   run_twf start --strict --no-attach
   [ "$status" -ne 0 ]
-  assert_output_contains "strict mode enabled"
+  assert_output_contains "RUN-022"
+  assert_output_contains "Start blocked"
 }

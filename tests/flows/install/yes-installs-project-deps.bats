@@ -28,7 +28,7 @@ EOF
   run_twf_with_path "$mock_bin" install --yes
 
   [ "$status" -eq 0 ]
-  assert_output_contains "Install scope: machine readiness + project dependencies"
-  assert_output_contains "Project dependencies installed"
+  assert_output_contains "Installing install-project"
+  assert_output_contains "Install complete"
   assert_file_exists "$TEST_ROOT/npm.called"
 }

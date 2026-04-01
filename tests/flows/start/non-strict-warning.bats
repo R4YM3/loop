@@ -22,6 +22,6 @@ setup() {
 
   run_twf start --no-attach
   [ "$status" -eq 0 ]
-  assert_output_contains "RUNTIME-401"
-  assert_output_contains "Project may not work as expected"
+  assert_output_contains "RUN-012"
+  assert_output_contains "Runtime may be degraded"
 }

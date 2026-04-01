@@ -15,7 +15,6 @@ It keeps team workflows consistent while still allowing developer-level override
 
 ```bash
 twf add
-twf install
 twf start
 ```
 
@@ -49,7 +48,7 @@ twf install
 twf start
 ```
 
-That is enough for most projects.
+`twf add` can run setup immediately in interactive mode.
 
 ## Typical Flow
 
@@ -88,12 +87,12 @@ Most commands infer the current project when run inside a linked repository.
 
 ### Project
 
-- `twf add`
+- `twf add [--dry-run] [--no-install]`
 - `twf remove`
 
 ### Environment Setup
 
-- `twf install`
+- `twf install [--yes] [--plan] [--no-project-deps] [--verbose]`
 
 ### Services
 
@@ -108,6 +107,32 @@ Most commands infer the current project when run inside a linked repository.
 - `twf stop`
 - `twf status`
 - `twf doctor`
+
+## CLI Output Style
+
+`twf` uses concise, scan-friendly output by default:
+
+- `◆` section heading
+- `...` in progress
+- `✓` success
+- `!` warning
+- `✖` blocking error
+
+When a command fails, `twf` prints a structured error block with a stable code, reason, and next actions.
+
+Example:
+
+```text
+✖ Start blocked (RUN-022)
+
+Reason
+  Strict mode is enabled and required environment setup is incomplete.
+
+What you can do
+  • Run: twf install
+  • Check status: twf doctor
+  • Retry (strict): twf start --strict
+```
 
 ### Other
 

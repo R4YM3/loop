@@ -56,9 +56,9 @@ twf uninstall
 
 Top-level commands:
 
-- `twf add [project-name] [--dry-run]`
+- `twf add [project-name] [--dry-run] [--no-install]`
 - `twf remove <project-name> [--yes]`
-- `twf install [--project <project>] [--yes]`
+- `twf install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]`
 - `twf service add <service> [--project <project>]`
 - `twf service remove <service> [--project <project>]`
 - `twf service list [--project <project> | --global]`
@@ -79,16 +79,22 @@ Most commands can infer project context when run inside a linked repository.
 
 ## Output and Return Behavior
 
-`twf` uses human-readable CLI output with status labels and actionable next steps.
+`twf` uses concise CLI output with a calm default mode.
 
-Common labels:
+Default symbols:
 
-- `[ok]` success
-- `[info]` informational
-- `[warn]` non-blocking issue
-- `[error]` blocking issue
-- `[plan]` setup/install plan
-- `[install]` install progress
+- `◆` section heading
+- `...` in progress
+- `✓` success
+- `!` warning
+- `✖` blocking error
+
+Failure blocks include:
+
+- stable code (`INS-0xx`, `RUN-0xx`, `DOC-0xx`)
+- short title
+- `Reason`
+- `What you can do`
 
 Exit behavior:
 
@@ -99,17 +105,16 @@ Examples:
 
 - `twf add`
   - creates config and links,
-  - prints next steps,
-  - in interactive mode asks: `Run environment setup now? [Y/n]`
+  - can run setup immediately,
+  - supports skipping setup with `--no-install`
 - `twf install`
-  - prints requirements plan,
-  - installs selected/all missing machine requirements,
+  - installs required environment setup,
   - installs project dependencies,
-  - prints completion summary
+  - supports `--plan` preview mode
 - `twf start`
   - starts workflow,
-  - warns in non-strict mode if requirements are missing,
-  - fails in strict mode if requirements are missing
+  - warns in non-strict mode when setup is incomplete,
+  - fails in strict mode with code `RUN-022`
 - `twf doctor`
   - prints diagnostics and fix suggestions
 
@@ -118,7 +123,7 @@ Examples:
 ### Flow A: First-Time Setup
 
 1. `twf add`
-2. confirm setup prompt (or run `twf install`)
+2. setup runs automatically in interactive mode (or run `twf install`)
 3. `twf start`
 
 ### Flow B: Controlled Setup
@@ -148,11 +153,12 @@ Examples:
 1. machine readiness requirements
 2. project dependencies
 
-Interactive behavior:
+Default behavior:
 
-- default is “install all missing”,
-- optional custom selection via checkbox-style selector,
-- supports `--yes` for non-interactive full install.
+- setup and dependency install run without repeated prompts,
+- supports `--yes` for non-interactive execution,
+- supports `--plan` for trust-first preview,
+- supports `--no-project-deps` to limit scope to environment setup.
 
 Project dependency installers are detected from project root:
 
