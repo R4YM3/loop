@@ -6,6 +6,7 @@ OO_INSTALL_ROOT="${OO_INSTALL_ROOT:-$HOME/.local/share/oo}"
 OO_BIN_DIR="${OO_BIN_DIR:-$HOME/.local/bin}"
 VERBOSE=false
 OO_PATH_PERSISTED=false
+DISABLE_ANALYTICS=false
 
 RAW_BOOTSTRAP_URL="https://raw.githubusercontent.com/R4YM3/loop/main/scripts/bootstrap.sh"
 
@@ -292,15 +293,28 @@ configure_cli_step() {
   ensure_path_persisted "$OO_BIN_DIR"
 }
 
+configure_analytics_preference() {
+  local enabled="$1"
+  local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/oo"
+  local config_file="$config_dir/config.yml"
+  mkdir -p "$config_dir"
+
+  ruby -ryaml -e 'path = ARGV[0]; enabled = ARGV[1] == "true"; raw = File.exist?(path) ? YAML.safe_load(File.read(path), aliases: false) : {}; data = raw.is_a?(Hash) ? raw : {}; analytics = data["analytics"].is_a?(Hash) ? data["analytics"] : {}; analytics["enabled"] = enabled; data["analytics"] = analytics; File.write(path, data.to_yaml(line_width: -1))' "$config_file" "$enabled"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
   --verbose)
     VERBOSE=true
     shift
     ;;
+  --no-analytics)
+    DISABLE_ANALYTICS=true
+    shift
+    ;;
   -h | --help)
     cat <<EOF
-Usage: bash scripts/bootstrap.sh [--verbose]
+Usage: bash scripts/bootstrap.sh [--verbose] [--no-analytics]
 
 Installs or updates oo and configures your shell PATH.
 EOF
@@ -376,6 +390,11 @@ echo "Configuring CLI"
 if ! run_step "Configuring CLI" true configure_cli_step; then
   failure_block "BST-011" "Failed to configure CLI symlink or PATH."
   exit 1
+fi
+
+if [[ "$DISABLE_ANALYTICS" == true ]]; then
+  configure_analytics_preference false
+  echo "  ✓ Analytics disabled"
 fi
 
 if [[ "$OO_PATH_PERSISTED" == true ]]; then

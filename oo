@@ -17,6 +17,8 @@ OO_CONFIG_FILE="$OO_CONFIG_DIR/config.yml"
 SERVICES_DIR="$RUNTIME_DIR/services"
 SERVICE_STATE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/oo/state/services"
 DEP_ADVISORY_STATE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/oo/state/dependencies"
+ANALYTICS_STATE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/oo/state/analytics"
+ANALYTICS_EVENT_LOG="$ANALYTICS_STATE_ROOT/events.jsonl"
 SERVICE_CHECK_TIMEOUT_SEC="${OO_SERVICE_CHECK_TIMEOUT_SEC:-4.0}"
 
 START_MISSING_SERVICES=()
@@ -34,6 +36,11 @@ OO_COMMAND_ENV_OVERRIDES=()
 SERVICE_AUTH_ISSUES=()
 OO_ENV_FILE_KEYS=()
 OO_ENV_FILE_VALUES=()
+ANALYTICS_COMMAND=""
+ANALYTICS_FLAGS=()
+ANALYTICS_START_MS=0
+ANALYTICS_DOCTOR_ISSUES=0
+ANALYTICS_DOCTOR_DEP_ADVISORIES=0
 
 ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
 info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
@@ -203,13 +210,14 @@ Commands:
   status                       Show running workflows and service health
   validate                     Validate workflow files
   doctor                       Run environment diagnostics
-  install [--workflow <name>] [--yes] [--plan] [--no-workflow-deps] [--verbose]
+  analytics <subcommand>       Manage usage analytics settings
+  install [--workflow <name>] [--yes] [--plan] [--no-workflow-deps] [--no-analytics] [--verbose]
                                Install machine readiness and workflow dependencies
   update                       Pull latest oo runtime repo
   list                         List workflows and installed aliases
   start <workflow> [args...]    Start a workflow (supports --strict)
   stop <workflow>               Stop a running workflow
-  uninstall [--yes]            Remove global oo CLI installation
+  uninstall [--yes] [--analytics]   Remove global oo CLI installation
   version                      Print oo version
   help                         Show this help
 
@@ -225,6 +233,7 @@ Examples:
   oo status
   oo validate
   oo doctor
+  oo analytics status
   oo install
   oo install --yes
   oo update
@@ -263,7 +272,7 @@ EOF
 
 closest_command() {
   local needle="$1"
-  local commands=(add remove service demo status validate doctor install update list start stop uninstall version help)
+  local commands=(add remove service demo status validate doctor analytics install update list start stop uninstall version help)
 
   if command -v python3 >/dev/null 2>&1; then
     python3 - "$needle" "${commands[@]}" <<'PY'
@@ -309,7 +318,7 @@ cmd_help() {
   --all)
     usage
     ;;
-  add | remove | service | doctor | install | uninstall)
+  add | remove | service | doctor | analytics | install | uninstall)
     "$0" "$topic" --help
     ;;
   start)
@@ -363,9 +372,17 @@ Usage: oo update
 Pulls latest oo runtime and refreshes the oo CLI symlink.
 EOF
     ;;
+  analytics)
+    cat <<'EOF'
+Usage: oo analytics <status|enable|disable>
+
+Manages local analytics preference.
+Default is enabled for interactive usage and disabled for non-interactive usage.
+EOF
+    ;;
   install)
     cat <<'EOF'
-Usage: oo install [--workflow <workflow>] [--yes]
+Usage: oo install [--workflow <workflow>] [--yes] [--plan] [--no-workflow-deps] [--no-analytics] [--verbose]
 
 Installs machine readiness requirements and workflow dependencies.
 If no workflow is provided, oo tries to infer it from current context.
@@ -450,6 +467,200 @@ read_configured_workflow_root() {
   expand_path "$configured"
 }
 
+read_configured_analytics_enabled() {
+  if [[ ! -f "$OO_CONFIG_FILE" ]]; then
+    echo ""
+    return 0
+  fi
+
+  ruby -ryaml -e 'path = ARGV[0]; raw = YAML.safe_load(File.read(path), aliases: false); data = raw.is_a?(Hash) ? raw : {}; analytics = data["analytics"]; value = analytics.is_a?(Hash) ? analytics["enabled"] : nil; puts(value == true ? "true" : value == false ? "false" : "")' "$OO_CONFIG_FILE" 2>/dev/null || true
+}
+
+read_configured_analytics_install_id() {
+  if [[ ! -f "$OO_CONFIG_FILE" ]]; then
+    echo ""
+    return 0
+  fi
+
+  ruby -ryaml -e 'path = ARGV[0]; raw = YAML.safe_load(File.read(path), aliases: false); data = raw.is_a?(Hash) ? raw : {}; analytics = data["analytics"]; value = analytics.is_a?(Hash) ? analytics["install_id"] : nil; puts(value.is_a?(String) ? value : "")' "$OO_CONFIG_FILE" 2>/dev/null || true
+}
+
+write_config_analytics_enabled() {
+  local enabled="$1"
+  mkdir -p "$OO_CONFIG_DIR"
+  ruby -ryaml -e 'path = ARGV[0]; enabled = ARGV[1] == "true"; raw = File.exist?(path) ? YAML.safe_load(File.read(path), aliases: false) : {}; data = raw.is_a?(Hash) ? raw : {}; analytics = data["analytics"].is_a?(Hash) ? data["analytics"] : {}; analytics["enabled"] = enabled; data["analytics"] = analytics; File.write(path, data.to_yaml(line_width: -1))' "$OO_CONFIG_FILE" "$enabled"
+}
+
+write_config_analytics_install_id() {
+  local install_id="$1"
+  mkdir -p "$OO_CONFIG_DIR"
+  ruby -ryaml -e 'path = ARGV[0]; install_id = ARGV[1]; raw = File.exist?(path) ? YAML.safe_load(File.read(path), aliases: false) : {}; data = raw.is_a?(Hash) ? raw : {}; analytics = data["analytics"].is_a?(Hash) ? data["analytics"] : {}; analytics["install_id"] = install_id; data["analytics"] = analytics; File.write(path, data.to_yaml(line_width: -1))' "$OO_CONFIG_FILE" "$install_id"
+}
+
+analytics_preference_source() {
+  if [[ -n "${OO_ANALYTICS:-}" ]]; then
+    echo "env"
+    return 0
+  fi
+
+  local configured
+  configured="$(read_configured_analytics_enabled)"
+  if [[ "$configured" == "true" || "$configured" == "false" ]]; then
+    echo "config"
+    return 0
+  fi
+
+  if is_interactive_terminal; then
+    echo "default-interactive"
+  else
+    echo "default-non-interactive"
+  fi
+}
+
+analytics_enabled() {
+  if [[ -n "${OO_ANALYTICS:-}" ]]; then
+    case "${OO_ANALYTICS}" in
+    1 | true | TRUE | True | yes | YES | Yes | on | ON | On)
+      return 0
+      ;;
+    0 | false | FALSE | False | no | NO | No | off | OFF | Off)
+      return 1
+      ;;
+    esac
+  fi
+
+  local configured
+  configured="$(read_configured_analytics_enabled)"
+  if [[ "$configured" == "true" ]]; then
+    return 0
+  fi
+  if [[ "$configured" == "false" ]]; then
+    return 1
+  fi
+
+  is_interactive_terminal
+}
+
+generate_install_id() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    date +%s
+    return 0
+  fi
+  python3 - <<'PY'
+import uuid
+print(str(uuid.uuid4()))
+PY
+}
+
+ensure_analytics_install_id() {
+  local install_id
+  install_id="$(read_configured_analytics_install_id)"
+  if [[ -n "$install_id" ]]; then
+    echo "$install_id"
+    return 0
+  fi
+
+  local state_install_id_file="$ANALYTICS_STATE_ROOT/install_id"
+  if [[ -f "$state_install_id_file" ]]; then
+    install_id="$(cat "$state_install_id_file" 2>/dev/null || true)"
+    if [[ -n "$install_id" ]]; then
+      echo "$install_id"
+      return 0
+    fi
+  fi
+
+  install_id="$(generate_install_id)"
+  mkdir -p "$ANALYTICS_STATE_ROOT"
+  printf '%s\n' "$install_id" >"$state_install_id_file"
+  if command -v ruby >/dev/null 2>&1; then
+    write_config_analytics_install_id "$install_id" || true
+  fi
+  echo "$install_id"
+}
+
+epoch_millis() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    date +%s000
+    return 0
+  fi
+  python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+}
+
+analytics_begin() {
+  ANALYTICS_COMMAND="$1"
+  shift || true
+  ANALYTICS_FLAGS=()
+  local arg
+  for arg in "$@"; do
+    if [[ "$arg" == --* ]]; then
+      ANALYTICS_FLAGS+=("$arg")
+    fi
+  done
+  ANALYTICS_START_MS="$(epoch_millis)"
+  ANALYTICS_DOCTOR_ISSUES=0
+  ANALYTICS_DOCTOR_DEP_ADVISORIES=0
+}
+
+record_analytics_event() {
+  local exit_code="$1"
+  analytics_enabled || return 0
+
+  local install_id
+  install_id="$(ensure_analytics_install_id)"
+  local end_ms
+  end_ms="$(epoch_millis)"
+  local duration=$((end_ms - ANALYTICS_START_MS))
+
+  mkdir -p "$ANALYTICS_STATE_ROOT"
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 0
+  fi
+  set +e
+  python3 - "$ANALYTICS_EVENT_LOG" "$install_id" "$ANALYTICS_COMMAND" "$exit_code" "$duration" "$ANALYTICS_DOCTOR_ISSUES" "$ANALYTICS_DOCTOR_DEP_ADVISORIES" "${ANALYTICS_FLAGS[@]-}" <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+log_path = sys.argv[1]
+install_id = sys.argv[2]
+command = sys.argv[3]
+exit_code = int(sys.argv[4])
+duration_ms = int(sys.argv[5])
+doctor_issues = int(sys.argv[6])
+doctor_dep_advisories = int(sys.argv[7])
+flags = sys.argv[8:]
+
+event = {
+    "ts": datetime.now(timezone.utc).isoformat(),
+    "install_id": install_id,
+    "command": command,
+    "flags": flags,
+    "exit_code": exit_code,
+    "success": exit_code == 0,
+    "duration_ms": duration_ms,
+}
+
+if command == "doctor":
+    event["doctor_issues"] = doctor_issues
+    event["doctor_dependency_advisories"] = doctor_dep_advisories
+
+with open(log_path, "a", encoding="utf-8") as f:
+    f.write(json.dumps(event, separators=(",", ":")) + "\n")
+PY
+  set -e
+}
+
+analytics_finalize() {
+  local exit_code="$1"
+  if [[ -n "$ANALYTICS_COMMAND" ]]; then
+    record_analytics_event "$exit_code"
+  fi
+}
+
 save_configured_workflow_root() {
   local root="$1"
   if [[ "$root" == "$RUNTIME_DIR" ]]; then
@@ -458,9 +669,7 @@ save_configured_workflow_root() {
     exit 1
   fi
   mkdir -p "$OO_CONFIG_DIR"
-  cat >"$OO_CONFIG_FILE" <<EOF
-team_workflows_root: "$root"
-EOF
+  ruby -ryaml -e 'path = ARGV[0]; root = ARGV[1]; raw = File.exist?(path) ? YAML.safe_load(File.read(path), aliases: false) : {}; data = raw.is_a?(Hash) ? raw : {}; data["team_workflows_root"] = root; File.write(path, data.to_yaml(line_width: -1))' "$OO_CONFIG_FILE" "$root"
 }
 
 default_workflow_root_for_dir() {
@@ -3347,6 +3556,9 @@ EOF
     fi
   fi
 
+  ANALYTICS_DOCTOR_ISSUES="$issue_count"
+  ANALYTICS_DOCTOR_DEP_ADVISORIES="$dependency_advisory_count"
+
   if [[ "$issue_count" -eq 0 ]]; then
     echo "✓ System healthy"
     echo "  No issues found"
@@ -3395,6 +3607,7 @@ cmd_install() {
   local assume_yes=false
   local plan_only=false
   local skip_project_deps=false
+  local disable_analytics=false
   local verbose_mode=false
   local changed_items=()
 
@@ -3420,13 +3633,17 @@ cmd_install() {
       skip_project_deps=true
       shift
       ;;
+    --no-analytics)
+      disable_analytics=true
+      shift
+      ;;
     --verbose)
       verbose_mode=true
       shift
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: oo install [--workflow <workflow>] [--yes] [--plan] [--no-workflow-deps] [--verbose]
+Usage: oo install [--workflow <workflow>] [--yes] [--plan] [--no-workflow-deps] [--no-analytics] [--verbose]
 
 Installs machine readiness requirements and workflow dependencies.
 EOF
@@ -3434,11 +3651,16 @@ EOF
       ;;
     *)
       error "Unexpected argument: $1"
-      info "Usage: oo install [--workflow <workflow>] [--yes] [--plan] [--no-workflow-deps] [--verbose]"
+      info "Usage: oo install [--workflow <workflow>] [--yes] [--plan] [--no-workflow-deps] [--no-analytics] [--verbose]"
       exit 1
       ;;
     esac
   done
+
+  if [[ "$disable_analytics" == true ]]; then
+    write_config_analytics_enabled false
+    info "Analytics disabled for future runs"
+  fi
 
   if [[ -z "$project_name" ]]; then
     project_name="$(infer_start_project_from_context)"
@@ -4275,8 +4497,50 @@ cmd_stop() {
   fi
 }
 
+cmd_analytics() {
+  local subcommand="${1:-status}"
+
+  case "$subcommand" in
+  status)
+    local enabled_text="disabled"
+    if analytics_enabled; then
+      enabled_text="enabled"
+    fi
+    echo "Analytics"
+    echo "  Status: $enabled_text"
+    echo "  Source: $(analytics_preference_source)"
+    echo "  Event log: $ANALYTICS_EVENT_LOG"
+    ;;
+  enable)
+    write_config_analytics_enabled true
+    ok "Analytics enabled"
+    info "You can disable anytime: oo analytics disable"
+    ;;
+  disable)
+    write_config_analytics_enabled false
+    ok "Analytics disabled"
+    ;;
+  -h | --help | help)
+    cat <<'EOF'
+Usage: oo analytics <status|enable|disable>
+
+Examples:
+  oo analytics status
+  oo analytics enable
+  oo analytics disable
+EOF
+    ;;
+  *)
+    error "Unknown analytics subcommand: $subcommand"
+    info "Usage: oo analytics <status|enable|disable>"
+    return 1
+    ;;
+  esac
+}
+
 cmd_uninstall() {
   local assume_yes=false
+  local remove_analytics=false
   local arg
 
   for arg in "$@"; do
@@ -4284,18 +4548,22 @@ cmd_uninstall() {
     --yes)
       assume_yes=true
       ;;
+    --analytics)
+      remove_analytics=true
+      ;;
     -h | --help)
       cat <<'EOF'
-Usage: oo uninstall [--yes]
+Usage: oo uninstall [--yes] [--analytics]
 
 Removes global oo CLI installation (symlink and install root).
 This does not remove tmuxinator workflow aliases.
+Use --analytics to also disable analytics and remove local analytics event data.
 EOF
       return 0
       ;;
     *)
       error "Unknown option for uninstall: $arg"
-      info "Usage: oo uninstall [--yes]"
+      info "Usage: oo uninstall [--yes] [--analytics]"
       exit 1
       ;;
     esac
@@ -4343,11 +4611,25 @@ EOF
   else
     info "Kept install root: $install_root"
   fi
+
+  if [[ "$remove_analytics" == true ]]; then
+    write_config_analytics_enabled false
+    if [[ -d "$ANALYTICS_STATE_ROOT" ]]; then
+      rm -rf "$ANALYTICS_STATE_ROOT"
+      ok "Removed analytics data: $ANALYTICS_STATE_ROOT"
+    else
+      info "Analytics data not found: $ANALYTICS_STATE_ROOT"
+    fi
+    ok "Analytics disabled"
+  fi
 }
 
 main() {
   local command="${1:-help}"
   shift || true
+
+  analytics_begin "$command" "$@"
+  trap 'analytics_finalize "$?"' EXIT
 
   case "$command" in
   help | -h | --help)
@@ -4376,6 +4658,9 @@ main() {
     ;;
   doctor)
     cmd_doctor "$@"
+    ;;
+  analytics)
+    cmd_analytics "$@"
     ;;
   update)
     cmd_update "$@"
