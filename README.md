@@ -51,8 +51,12 @@ With Loop:
 Install globally:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/R4YM3/tmuxinator-team-workflows/main/scripts/bootstrap.sh" | bash && exec "$SHELL" -l
+curl -fsSL "https://raw.githubusercontent.com/R4YM3/loop/main/scripts/bootstrap.sh" | bash && exec "$SHELL" -l
 ```
+
+Bootstrap script source:
+
+`https://github.com/R4YM3/loop/blob/main/scripts/bootstrap.sh`
 
 Verify:
 

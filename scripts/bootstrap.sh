@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OO_REPO_URL="${OO_REPO_URL:-https://github.com/R4YM3/tmuxinator-team-workflows.git}"
+OO_REPO_URL="${OO_REPO_URL:-https://github.com/R4YM3/loop.git}"
 OO_INSTALL_ROOT="${OO_INSTALL_ROOT:-$HOME/.local/share/oo}"
 OO_BIN_DIR="${OO_BIN_DIR:-$HOME/.local/bin}"
 
@@ -198,7 +198,7 @@ ensure_path_persisted() {
 if [[ -z "$OO_REPO_URL" ]]; then
   error "OO_REPO_URL is empty."
   info "Set OO_REPO_URL and rerun, for example:"
-  echo "  OO_REPO_URL='https://github.com/R4YM3/tmuxinator-team-workflows.git' bash scripts/bootstrap.sh"
+  echo "  OO_REPO_URL='https://github.com/R4YM3/loop.git' bash scripts/bootstrap.sh"
   exit 1
 fi
 
