@@ -10,14 +10,14 @@ setup() {
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
 }
 
 @test "oo doctor shows runtime diagnostics and inferred project checks" {
   cd "$TEST_ROOT/repos/doctor-project"
 
-  run_twf doctor
+  run_oo doctor
   [ "$status" -eq 0 ]
   assert_output_contains "◆ Doctor"
   assert_output_contains "Project: doctor-project"

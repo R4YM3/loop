@@ -11,7 +11,7 @@ setup() {
   run test -f "$REPO_ROOT/scripts/bootstrap.sh"
   [ "$status" -eq 0 ]
 
-  run_twf help
+  run_oo help
   [ "$status" -eq 0 ]
 }
 
@@ -21,7 +21,7 @@ setup() {
   touch "$repo/package.json"
   cd "$repo"
 
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
   run test -f "$TEAM_ROOT/docker-project/workflow.yaml"
   [ "$status" -eq 0 ]

@@ -13,7 +13,7 @@ setup() {
   touch "$repo/package.json"
 
   cd "$repo"
-  run_twf add dry-repo --dry-run
+  run_oo add dry-repo --dry-run
   [ "$status" -eq 0 ]
   assert_output_contains "Dry run: no files were written"
 

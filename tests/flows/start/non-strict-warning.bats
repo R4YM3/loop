@@ -10,17 +10,17 @@ setup() {
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
 
-  run_twf service add containers
+  run_oo service add containers
   [ "$status" -eq 0 ]
 }
 
 @test "oo start warns when requirements are missing in non-strict mode" {
   cd "$TEST_ROOT/repos/start-warning"
 
-  run_twf start --no-attach
+  run_oo start --no-attach
   [ "$status" -eq 0 ]
   assert_output_contains "RUN-012"
   assert_output_contains "Runtime may be degraded"

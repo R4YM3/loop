@@ -10,17 +10,17 @@ setup() {
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
 
-  run_twf service add containers
+  run_oo service add containers
   [ "$status" -eq 0 ]
 }
 
 @test "oo start --strict fails when service is not ready" {
   cd "$TEST_ROOT/repos/strict-project"
 
-  run_twf start --strict --no-attach
+  run_oo start --strict --no-attach
   [ "$status" -ne 0 ]
   assert_output_contains "RUN-022"
   assert_output_contains "Start blocked"

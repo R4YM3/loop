@@ -9,7 +9,7 @@ setup() {
   mkdir -p "$TEST_ROOT/random-dir"
   cd "$TEST_ROOT/random-dir"
 
-  run_twf start
+  run_oo start
   [ "$status" -ne 0 ]
   assert_output_contains "Missing project name and could not infer"
 }

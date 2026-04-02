@@ -10,7 +10,7 @@ setup() {
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
 }
 
@@ -18,7 +18,7 @@ setup() {
   local repo="$TEST_ROOT/repos/infer-project"
   cd "$repo"
 
-  run_twf start --no-attach
+  run_oo start --no-attach
   [ "$status" -eq 0 ]
   assert_output_contains "[oo] Project: infer-project"
   assert_output_contains "✔ Session started"

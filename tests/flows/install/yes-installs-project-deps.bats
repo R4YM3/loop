@@ -10,7 +10,7 @@ setup() {
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
 
   cat >"$TEAM_ROOT/install-project/override.yaml" <<'EOF'
@@ -25,7 +25,7 @@ EOF
   create_mock_command "$mock_bin" "npm" 'touch "$TEST_ROOT/npm.called"'
 
   cd "$TEST_ROOT/repos/install-project"
-  run_twf_with_path "$mock_bin" install --yes
+  run_oo_with_path "$mock_bin" install --yes
 
   [ "$status" -eq 0 ]
   assert_output_contains "Installing install-project"

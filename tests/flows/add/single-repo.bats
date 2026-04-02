@@ -13,7 +13,7 @@ setup() {
   touch "$repo/package.json"
 
   cd "$repo"
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
 
   assert_file_exists "$TEAM_ROOT/my-project/workflow.yaml"

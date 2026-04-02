@@ -10,12 +10,12 @@ setup() {
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
 }
 
 @test "oo status shows running sessions section and project health" {
-  run_twf status
+  run_oo status
   [ "$status" -eq 0 ]
   assert_output_contains "Running project sessions"
   assert_output_contains "Project service health"

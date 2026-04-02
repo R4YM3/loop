@@ -10,14 +10,14 @@ setup() {
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
-  run_twf add
+  run_oo add
   [ "$status" -eq 0 ]
 }
 
 @test "oo service add infers current project when --project is omitted" {
   cd "$TEST_ROOT/repos/service-project"
 
-  run_twf service add redis
+  run_oo service add redis
   [ "$status" -eq 0 ]
   assert_output_contains "inferred 'service-project'"
 

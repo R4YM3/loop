@@ -18,7 +18,7 @@ setup() {
   touch "$api/pyproject.toml"
 
   cd "$ws"
-  run_twf add team-workspace --dry-run
+  run_oo add team-workspace --dry-run
   [ "$status" -eq 0 ]
   assert_output_contains "Mode: workspace"
   assert_output_contains "- frontend"

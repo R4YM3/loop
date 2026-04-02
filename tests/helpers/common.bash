@@ -28,11 +28,11 @@ create_git_repo() {
   git -C "$dir" init -q
 }
 
-run_twf() {
+run_oo() {
   run env HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" "$OO_BIN" "$@"
 }
 
-run_twf_with_path() {
+run_oo_with_path() {
   local extra_path="$1"
   shift
   run env HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" PATH="$extra_path:$PATH" "$OO_BIN" "$@"
