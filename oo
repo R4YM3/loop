@@ -2921,6 +2921,298 @@ is_js_dependency_label() {
   esac
 }
 
+resolve_python_requirement_for_project() {
+  local project_root="$1"
+  local python_version_file="$project_root/.python-version"
+  if [[ -f "$python_version_file" ]]; then
+    local value
+    value="$(tr -d '[:space:]' <"$python_version_file" 2>/dev/null || true)"
+    if [[ -n "$value" ]]; then
+      echo "pyenv|$value"
+      return 0
+    fi
+  fi
+
+  local pyproject_file="$project_root/pyproject.toml"
+  if [[ -f "$pyproject_file" ]]; then
+    local requires_python
+    requires_python="$(python3 - "$pyproject_file" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
+match = re.search(r"requires-python\\s*=\\s*['\"]([^'\"]+)['\"]", text)
+print(match.group(1).strip() if match else "")
+PY
+)"
+    if [[ -n "$requires_python" ]]; then
+      echo "requires-python|$requires_python"
+      return 0
+    fi
+  fi
+
+  echo ""
+}
+
+python_version_satisfies_requirement() {
+  local version="$1"
+  local requirement="$2"
+  node_version_satisfies_requirement "$version" "$requirement"
+}
+
+recommended_python_target_from_requirement() {
+  local source_kind="$1"
+  local requirement="$2"
+
+  if [[ "$source_kind" == "pyenv" ]]; then
+    echo "$requirement"
+    return 0
+  fi
+
+  recommended_node_target_from_requirement "$source_kind" "$requirement"
+}
+
+load_pyenv_in_shell_snippet() {
+  cat <<'EOF'
+if command -v pyenv >/dev/null 2>&1; then
+  eval "$(pyenv init -)" >/dev/null 2>&1 || true
+fi
+EOF
+}
+
+ensure_python_runtime_for_project() {
+  local project_root="$1"
+  local requirement_info
+  requirement_info="$(resolve_python_requirement_for_project "$project_root")"
+  [[ -n "$requirement_info" ]] || return 0
+
+  local source_kind="${requirement_info%%|*}"
+  local requirement_value="${requirement_info#*|}"
+  local current_python
+  current_python="$(python3 - <<'PY'
+import sys
+print('.'.join(str(i) for i in sys.version_info[:3]))
+PY
+)"
+
+  if [[ -n "$current_python" ]]; then
+    if [[ "$source_kind" == "pyenv" ]]; then
+      if [[ "$current_python" == "$requirement_value"* ]]; then
+        return 0
+      fi
+    else
+      if python_version_satisfies_requirement "$current_python" "$requirement_value"; then
+        return 0
+      fi
+    fi
+  fi
+
+  local target_version
+  target_version="$(recommended_python_target_from_requirement "$source_kind" "$requirement_value")"
+  [[ -n "$target_version" ]] || target_version="3.11"
+
+  local pyenv_setup
+  pyenv_setup="$(load_pyenv_in_shell_snippet)"
+  set +e
+  bash -c "$pyenv_setup; command -v pyenv >/dev/null 2>&1" >/dev/null 2>&1
+  local pyenv_ready=$?
+  set -e
+  if [[ "$pyenv_ready" -ne 0 ]]; then
+    error_block "INS-121" "Install blocked" "Python version does not satisfy project requirement and pyenv is not available." --context "Required: $requirement_value | Actual: ${current_python:-missing}" "Install pyenv and retry: oo install" "Use project runtime manually, then retry: oo install"
+    return 1
+  fi
+
+  local switch_log
+  switch_log="$(mktemp "${TMPDIR:-/tmp}/oo-python-switch-XXXXXX")"
+  set +e
+  bash -c "$pyenv_setup; pyenv install -s '$target_version' && pyenv shell '$target_version'" >"$switch_log" 2>&1
+  local switch_rc=$?
+  set -e
+  if [[ "$switch_rc" -ne 0 ]]; then
+    local details
+    details="$(python3 - "$switch_log" <<'PY'
+import sys
+from pathlib import Path
+lines = Path(sys.argv[1]).read_text(errors='replace').splitlines()
+for line in lines[-10:]:
+    print(line)
+PY
+)"
+    rm -f "$switch_log"
+    install_failure_block_with_details "INS-121" "Could not switch Python runtime to a project-compatible version." "$details" "Install Python manually and retry: oo install" "Check .python-version or pyproject.toml requires-python"
+    return 1
+  fi
+  rm -f "$switch_log"
+  return 0
+}
+
+python_dependency_command_prefix() {
+  local project_root="$1"
+  local requirement_info
+  requirement_info="$(resolve_python_requirement_for_project "$project_root")"
+  [[ -n "$requirement_info" ]] || return 0
+
+  local source_kind="${requirement_info%%|*}"
+  local requirement_value="${requirement_info#*|}"
+  local target_version
+  target_version="$(recommended_python_target_from_requirement "$source_kind" "$requirement_value")"
+  [[ -n "$target_version" ]] || target_version="3.11"
+
+  local pyenv_setup
+  pyenv_setup="$(load_pyenv_in_shell_snippet)"
+  printf '%s; pyenv shell "%s" >/dev/null 2>&1 || true; ' "$pyenv_setup" "$target_version"
+}
+
+resolve_ruby_requirement_for_project() {
+  local project_root="$1"
+  local ruby_version_file="$project_root/.ruby-version"
+  if [[ -f "$ruby_version_file" ]]; then
+    local value
+    value="$(tr -d '[:space:]' <"$ruby_version_file" 2>/dev/null || true)"
+    if [[ -n "$value" ]]; then
+      echo "rbenv|$value"
+      return 0
+    fi
+  fi
+
+  local gemfile="$project_root/Gemfile"
+  if [[ -f "$gemfile" ]]; then
+    local ruby_req
+    ruby_req="$(python3 - "$gemfile" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
+match = re.search(r"^\\s*ruby\\s+['\"]([^'\"]+)['\"]", text, flags=re.M)
+print(match.group(1).strip() if match else "")
+PY
+)"
+    if [[ -n "$ruby_req" ]]; then
+      echo "gemfile|$ruby_req"
+      return 0
+    fi
+  fi
+
+  echo ""
+}
+
+ruby_version_satisfies_requirement() {
+  local version="$1"
+  local requirement="$2"
+  node_version_satisfies_requirement "$version" "$requirement"
+}
+
+recommended_ruby_target_from_requirement() {
+  local source_kind="$1"
+  local requirement="$2"
+
+  if [[ "$source_kind" == "rbenv" ]]; then
+    echo "$requirement"
+    return 0
+  fi
+
+  recommended_node_target_from_requirement "$source_kind" "$requirement"
+}
+
+load_rbenv_in_shell_snippet() {
+  cat <<'EOF'
+if command -v rbenv >/dev/null 2>&1; then
+  eval "$(rbenv init -)" >/dev/null 2>&1 || true
+fi
+EOF
+}
+
+ensure_ruby_runtime_for_project() {
+  local project_root="$1"
+  local requirement_info
+  requirement_info="$(resolve_ruby_requirement_for_project "$project_root")"
+  [[ -n "$requirement_info" ]] || return 0
+
+  local source_kind="${requirement_info%%|*}"
+  local requirement_value="${requirement_info#*|}"
+  local current_ruby
+  current_ruby="$(ruby -e 'print RUBY_VERSION' 2>/dev/null || true)"
+
+  if [[ -n "$current_ruby" ]]; then
+    if [[ "$source_kind" == "rbenv" ]]; then
+      if [[ "$current_ruby" == "$requirement_value"* ]]; then
+        return 0
+      fi
+    else
+      if ruby_version_satisfies_requirement "$current_ruby" "$requirement_value"; then
+        return 0
+      fi
+    fi
+  fi
+
+  local target_version
+  target_version="$(recommended_ruby_target_from_requirement "$source_kind" "$requirement_value")"
+  [[ -n "$target_version" ]] || target_version="3.2.2"
+
+  local rbenv_setup
+  rbenv_setup="$(load_rbenv_in_shell_snippet)"
+  set +e
+  bash -c "$rbenv_setup; command -v rbenv >/dev/null 2>&1" >/dev/null 2>&1
+  local rbenv_ready=$?
+  set -e
+  if [[ "$rbenv_ready" -ne 0 ]]; then
+    error_block "INS-122" "Install blocked" "Ruby version does not satisfy project requirement and rbenv is not available." --context "Required: $requirement_value | Actual: ${current_ruby:-missing}" "Install rbenv and retry: oo install" "Use project runtime manually, then retry: oo install"
+    return 1
+  fi
+
+  local switch_log
+  switch_log="$(mktemp "${TMPDIR:-/tmp}/oo-ruby-switch-XXXXXX")"
+  set +e
+  bash -c "$rbenv_setup; rbenv install -s '$target_version' && rbenv shell '$target_version' && rbenv rehash" >"$switch_log" 2>&1
+  local switch_rc=$?
+  set -e
+  if [[ "$switch_rc" -ne 0 ]]; then
+    local details
+    details="$(python3 - "$switch_log" <<'PY'
+import sys
+from pathlib import Path
+lines = Path(sys.argv[1]).read_text(errors='replace').splitlines()
+for line in lines[-10:]:
+    print(line)
+PY
+)"
+    rm -f "$switch_log"
+    install_failure_block_with_details "INS-122" "Could not switch Ruby runtime to a project-compatible version." "$details" "Install Ruby manually and retry: oo install" "Check .ruby-version or Gemfile ruby directive"
+    return 1
+  fi
+  rm -f "$switch_log"
+  return 0
+}
+
+ruby_dependency_command_prefix() {
+  local project_root="$1"
+  local requirement_info
+  requirement_info="$(resolve_ruby_requirement_for_project "$project_root")"
+  [[ -n "$requirement_info" ]] || return 0
+
+  local source_kind="${requirement_info%%|*}"
+  local requirement_value="${requirement_info#*|}"
+  local target_version
+  target_version="$(recommended_ruby_target_from_requirement "$source_kind" "$requirement_value")"
+  [[ -n "$target_version" ]] || target_version="3.2.2"
+
+  local rbenv_setup
+  rbenv_setup="$(load_rbenv_in_shell_snippet)"
+  printf '%s; rbenv shell "%s" >/dev/null 2>&1 || true; ' "$rbenv_setup" "$target_version"
+}
+
+is_python_dependency_label() {
+  local label="$1"
+  [[ "$label" == "pip3 install -r requirements.txt" ]]
+}
+
+is_ruby_dependency_label() {
+  local label="$1"
+  [[ "$label" == "bundle install" ]]
+}
+
 collect_project_dependency_commands() {
   local project_root="$1"
   PROJECT_DEP_COMMANDS=()
@@ -2946,7 +3238,7 @@ collect_project_dependency_commands() {
   fi
 
   if [[ -f "$project_root/requirements.txt" ]]; then
-    PROJECT_DEP_COMMANDS+=("pip3 install -r requirements.txt")
+    PROJECT_DEP_COMMANDS+=("python -m pip install -r requirements.txt")
     PROJECT_DEP_LABELS+=("pip3 install -r requirements.txt")
   fi
 
@@ -3260,6 +3552,16 @@ run_project_dependency_commands() {
         return 1
       fi
       command_prefix="$(js_dependency_command_prefix "$project_root")"
+    elif is_python_dependency_label "$label"; then
+      if ! ensure_python_runtime_for_project "$project_root"; then
+        return 1
+      fi
+      command_prefix="$(python_dependency_command_prefix "$project_root")"
+    elif is_ruby_dependency_label "$label"; then
+      if ! ensure_ruby_runtime_for_project "$project_root"; then
+        return 1
+      fi
+      command_prefix="$(ruby_dependency_command_prefix "$project_root")"
     fi
 
     local cmd_log
