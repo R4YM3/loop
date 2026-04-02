@@ -25,6 +25,8 @@ INSTALL_CANDIDATES=()
 CHECKBOX_SELECTED=()
 PROJECT_DEP_COMMANDS=()
 PROJECT_DEP_LABELS=()
+INSTALL_WARNING_LINES=()
+INSTALL_CHANGED_LINES=()
 
 ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
 info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
@@ -51,6 +53,32 @@ error_block() {
     echo
     echo "Context"
     echo "  $context_line"
+  fi
+  echo
+  echo "What you can do"
+  local step
+  for step in "$@"; do
+    echo "  • $step"
+  done
+}
+
+install_failure_block_with_details() {
+  local code="$1"
+  local reason="$2"
+  local details="$3"
+  shift 3
+
+  echo "✖ Install failed ($code)"
+  echo
+  echo "Reason"
+  echo "  $reason"
+  if [[ -n "$details" ]]; then
+    echo
+    echo "Details"
+    while IFS= read -r line; do
+      [[ -n "$line" ]] || continue
+      echo "  $line"
+    done <<<"$details"
   fi
   echo
   echo "What you can do"
@@ -1911,29 +1939,125 @@ collect_project_dependency_commands() {
   fi
 }
 
+summarize_npm_install_warnings() {
+  local log_file="$1"
+
+  python3 - "$log_file" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+text = open(path, 'r', errors='replace').read()
+lines = text.splitlines()
+
+deprecations = sum(1 for line in lines if re.search(r'\bdeprecated\b', line, re.I))
+config_warn = any(re.search(r'npm\s+warn\s+.*config|npm\s+warn\s+config', line, re.I) for line in lines)
+
+vuln_line = None
+vuln_total = None
+severity = {}
+for line in lines:
+    m = re.search(r'(\d+) vulnerabilities?\s*\(([^)]*)\)', line, re.I)
+    if m:
+        vuln_total = int(m.group(1))
+        vuln_line = m.group(2).strip()
+        for part in vuln_line.split(','):
+            part = part.strip()
+            mm = re.match(r'(\d+)\s+(low|moderate|high|critical)', part, re.I)
+            if mm:
+                severity[mm.group(2).lower()] = int(mm.group(1))
+
+if config_warn:
+    print('WARN|npm config contains deprecated or invalid settings')
+if deprecations > 0:
+    print(f'WARN|Deprecated packages detected ({deprecations})')
+if vuln_total is not None:
+    sev_order = ['low', 'moderate', 'high', 'critical']
+    details = ', '.join(f"{severity[k]} {k}" for k in sev_order if k in severity)
+    if details:
+        print(f'WARN|{vuln_total} vulnerabilities reported ({details})')
+    else:
+        print(f'WARN|{vuln_total} vulnerabilities reported')
+PY
+}
+
 run_project_dependency_commands() {
   local project_root="$1"
+  local verbose_mode="${2:-false}"
   local idx=0
   local total=${#PROJECT_DEP_COMMANDS[@]}
 
+  INSTALL_WARNING_LINES=()
+  INSTALL_CHANGED_LINES=()
+
   if [[ "$total" -eq 0 ]]; then
-    info "No workflow dependency installers detected"
+    info "No dependency installers detected"
     return 0
   fi
 
-  echo "Workflow dependencies"
+  echo "Dependencies"
   local command=""
   local label=""
   for ((idx = 0; idx < total; idx++)); do
     command="${PROJECT_DEP_COMMANDS[$idx]}"
     label="${PROJECT_DEP_LABELS[$idx]}"
     echo "  ... $label"
-    if ! (cd "$project_root" && eval "$command"); then
-      error_block "INS-012" "Install failed" "$label exited with a non-zero status" "Run again with --verbose" "Check workflow dependency files"
+
+    local cmd_log
+    cmd_log="$(mktemp "${TMPDIR:-/tmp}/oo-deps-${idx}-XXXXXX.log")"
+    local cmd_status=0
+    set +e
+    (cd "$project_root" && eval "$command") >"$cmd_log" 2>&1
+    cmd_status=$?
+    set -e
+
+    if [[ "$verbose_mode" == true ]]; then
+      cat "$cmd_log"
+    fi
+
+    if [[ "$cmd_status" -ne 0 ]]; then
+      local details=""
+      if [[ "$verbose_mode" != true ]]; then
+        details="$(python3 - "$cmd_log" <<'PY'
+import sys
+from pathlib import Path
+lines = Path(sys.argv[1]).read_text(errors='replace').splitlines()
+for line in lines[-12:]:
+    print(line)
+PY
+)"
+      fi
+      rm -f "$cmd_log"
+      install_failure_block_with_details "INS-101" "$label exited with code $cmd_status." "$details" "Retry with details: oo install --verbose" "Check dependency scripts and lockfiles"
       return 1
     fi
+
+    if [[ "$label" == "npm install" ]]; then
+      while IFS= read -r summary_line; do
+        [[ "$summary_line" == WARN\|* ]] || continue
+        INSTALL_WARNING_LINES+=("${summary_line#WARN|}")
+      done < <(summarize_npm_install_warnings "$cmd_log")
+      INSTALL_CHANGED_LINES+=("Installed npm dependencies")
+    else
+      INSTALL_CHANGED_LINES+=("Installed dependencies via $label")
+    fi
+
+    rm -f "$cmd_log"
     echo "  ✓ done"
   done
+
+  if [[ "$verbose_mode" != true && ${#INSTALL_WARNING_LINES[@]} -gt 0 ]]; then
+    echo
+    echo "Warnings"
+    local warning
+    for warning in "${INSTALL_WARNING_LINES[@]}"; do
+      echo "  ! $warning"
+    done
+    echo
+    echo "What you can do"
+    echo "  • Review: npm audit"
+    echo "  • Safe fixes: npm audit fix"
+  fi
 
   return 0
 }
@@ -2564,11 +2688,11 @@ EOF
     if [[ -n "$project_root_plan" && -d "$project_root_plan" ]]; then
       collect_project_dependency_commands "$project_root_plan"
       if [[ "$skip_project_deps" == true ]]; then
-        echo "  Workflow dependencies: skipped by flag"
+        echo "  Dependencies: skipped by flag"
       elif [[ ${#PROJECT_DEP_COMMANDS[@]} -gt 0 ]]; then
-        echo "  Will run workflow dependencies: $(join_by_comma "${PROJECT_DEP_LABELS[@]}")"
+        echo "  Will run dependencies: $(join_by_comma "${PROJECT_DEP_LABELS[@]}")"
       else
-        echo "  Workflow dependencies: none detected"
+        echo "  Dependencies: none detected"
       fi
     fi
     return 0
@@ -2596,7 +2720,7 @@ EOF
     selected_services=("${INSTALL_CANDIDATES[@]-}")
 
     if install_selected_services_for_project "$workflow_repo" "$project_name" "$assume_yes" "${selected_services[@]}"; then
-      changed_items+=("environment requirements")
+      changed_items+=("Installed environment requirements")
     fi
   fi
 
@@ -2627,19 +2751,24 @@ EOF
   fi
 
   if [[ "$install_project_dependencies" == true ]]; then
-    if run_project_dependency_commands "$project_root"; then
-      changed_items+=("workflow dependencies")
+    if run_project_dependency_commands "$project_root" "$verbose_mode"; then
+      if [[ ${#INSTALL_CHANGED_LINES[@]} -gt 0 ]]; then
+        local changed_line
+        for changed_line in "${INSTALL_CHANGED_LINES[@]}"; do
+          changed_items+=("$changed_line")
+        done
+      fi
     else
       return 1
     fi
   elif [[ "$skip_project_deps" == true ]]; then
-    echo "Workflow dependencies"
+    echo "Dependencies"
     echo "  ✓ skipped (--no-workflow-deps)"
   elif [[ ${#PROJECT_DEP_COMMANDS[@]} -eq 0 ]]; then
-    echo "Workflow dependencies"
+    echo "Dependencies"
     echo "  ✓ none detected"
   else
-    echo "Workflow dependencies"
+    echo "Dependencies"
     echo "  ✓ skipped"
   fi
 
@@ -2648,7 +2777,11 @@ EOF
   if [[ ${#changed_items[@]} -eq 0 ]]; then
     echo "  No changes needed"
   else
-    echo "  Changed: $(join_by_comma "${changed_items[@]}")"
+    echo "  Changed:"
+    local changed_item
+    for changed_item in "${changed_items[@]}"; do
+      echo "  - $changed_item"
+    done
   fi
   echo
   echo "Next:"
