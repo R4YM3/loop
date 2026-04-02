@@ -27,6 +27,10 @@ PROJECT_DEP_COMMANDS=()
 PROJECT_DEP_LABELS=()
 INSTALL_WARNING_LINES=()
 INSTALL_CHANGED_LINES=()
+OO_COMMAND_ENV_OVERRIDES=()
+SERVICE_AUTH_ISSUES=()
+OO_ENV_FILE_KEYS=()
+OO_ENV_FILE_VALUES=()
 
 ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
 info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
@@ -86,6 +90,81 @@ install_failure_block_with_details() {
   for step in "$@"; do
     echo "  • $step"
   done
+}
+
+spinner_should_render() {
+  local verbose_mode="${1:-false}"
+  [[ "$verbose_mode" != true && -t 1 ]]
+}
+
+spinner_start() {
+  local label="$1"
+  local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+  (
+    local i=0
+    while :; do
+      printf "\r  %s %s" "${frames[$((i % ${#frames[@]}))]}" "$label"
+      sleep 0.1
+      i=$((i + 1))
+    done
+  ) &
+  SPINNER_PID=$!
+  SPINNER_LABEL="$label"
+}
+
+spinner_stop() {
+  local status="$1"
+  local label="${2:-$SPINNER_LABEL}"
+  if [[ -n "${SPINNER_PID:-}" ]]; then
+    kill "$SPINNER_PID" >/dev/null 2>&1 || true
+    wait "$SPINNER_PID" 2>/dev/null || true
+    SPINNER_PID=""
+  fi
+
+  if [[ "$status" -eq 0 ]]; then
+    printf "\r  ✓ %s\n" "$label"
+  else
+    printf "\r  ✖ %s\n" "$label"
+  fi
+}
+
+run_logged_step() {
+  local label="$1"
+  local verbose_mode="$2"
+  local log_file="$3"
+  shift 3
+
+  if [[ "$verbose_mode" == true ]]; then
+    echo "  ... $label"
+    set +e
+    "$@" >"$log_file" 2>&1
+    local rc=$?
+    set -e
+    cat "$log_file"
+    return "$rc"
+  fi
+
+  if spinner_should_render "$verbose_mode"; then
+    spinner_start "$label"
+    set +e
+    "$@" >"$log_file" 2>&1
+    local rc=$?
+    set -e
+    spinner_stop "$rc" "$label"
+    return "$rc"
+  fi
+
+  echo "  ... $label"
+  set +e
+  "$@" >"$log_file" 2>&1
+  local rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "  ✓ $label"
+  else
+    echo "  ✖ $label"
+  fi
+  return "$rc"
 }
 
 usage() {
@@ -1864,6 +1943,150 @@ join_by_comma() {
   done
 }
 
+load_env_file_values() {
+  local workflow_root="$1"
+  OO_ENV_FILE_KEYS=()
+  OO_ENV_FILE_VALUES=()
+
+  [[ -d "$workflow_root" ]] || return 0
+
+  local env_file
+  for env_file in "$workflow_root/.env" "$workflow_root/.env.local"; do
+    [[ -f "$env_file" ]] || continue
+    while IFS=$'\t' read -r key value; do
+      [[ -n "$key" ]] || continue
+      local found=false
+      local i
+      for ((i = 0; i < ${#OO_ENV_FILE_KEYS[@]}; i++)); do
+        if [[ "${OO_ENV_FILE_KEYS[$i]}" == "$key" ]]; then
+          OO_ENV_FILE_VALUES[$i]="$value"
+          found=true
+          break
+        fi
+      done
+      if [[ "$found" == false ]]; then
+        OO_ENV_FILE_KEYS+=("$key")
+        OO_ENV_FILE_VALUES+=("$value")
+      fi
+    done < <(python3 - "$env_file" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+line_re = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+for raw in open(path, 'r', errors='replace').read().splitlines():
+    stripped = raw.strip()
+    if not stripped or stripped.startswith('#'):
+        continue
+    if stripped.startswith('export '):
+        stripped = stripped[len('export '):].strip()
+    if '=' not in stripped:
+        continue
+    key, value = stripped.split('=', 1)
+    key = key.strip()
+    value = value.strip()
+    if not line_re.match(key):
+        continue
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        value = value[1:-1]
+    print(f"{key}\t{value}")
+PY
+)
+  done
+}
+
+resolved_env_var_value() {
+  local name="$1"
+  if [[ -n "${!name-}" ]]; then
+    printf '%s' "${!name}"
+    return 0
+  fi
+
+  local i
+  for ((i = 0; i < ${#OO_ENV_FILE_KEYS[@]}; i++)); do
+    if [[ "${OO_ENV_FILE_KEYS[$i]}" == "$name" ]]; then
+      printf '%s' "${OO_ENV_FILE_VALUES[$i]}"
+      return 0
+    fi
+  done
+
+  printf ''
+}
+
+auth_entries_for_scope() {
+  local repo="$1"
+  local workflow_name="$2"
+  local scope="$3"
+  local override_file
+  override_file="$(resolve_project_override_file "$repo" "$workflow_name")"
+
+  ruby -ryaml -e '
+path = ARGV[0]
+scope = ARGV[1]
+exit 0 unless File.exist?(path)
+raw = YAML.safe_load(File.read(path), aliases: false)
+data = raw.is_a?(Hash) ? raw : {}
+auth = data["auth"].is_a?(Hash) ? data["auth"] : {}
+entries = auth[scope].is_a?(Hash) ? auth[scope] : {}
+entries.each do |name, cfg|
+  next unless name.is_a?(String)
+  cfg = cfg.is_a?(Hash) ? cfg : {}
+  token_env = cfg["token_env"]
+  next unless token_env.is_a?(String) && !token_env.strip.empty?
+  source_hint = cfg["registry"] || cfg["source"] || name
+  source_hint = source_hint.is_a?(String) ? source_hint : name
+  puts [name, token_env, source_hint].join("\t")
+end
+' "$override_file" "$scope"
+}
+
+build_env_overrides_for_command() {
+  OO_COMMAND_ENV_OVERRIDES=()
+  local i
+  for ((i = 0; i < ${#OO_ENV_FILE_KEYS[@]}; i++)); do
+    local key
+    key="${OO_ENV_FILE_KEYS[$i]}"
+    if [[ -z "${!key-}" ]]; then
+      OO_COMMAND_ENV_OVERRIDES+=("$key=${OO_ENV_FILE_VALUES[$i]}")
+    fi
+  done
+}
+
+validate_source_auth_requirements() {
+  local repo="$1"
+  local workflow_name="$2"
+
+  local line
+  while IFS=$'\t' read -r source_name token_env source_hint; do
+    [[ -n "$source_name" ]] || continue
+    local token_value
+    token_value="$(resolved_env_var_value "$token_env")"
+    if [[ -z "$token_value" ]]; then
+      error_block "INS-131" "Install blocked" "Missing authentication token for source access." --context "Workflow: $workflow_name | Source: $source_hint | Required env: $token_env" "Export token: export $token_env=..." "Retry: oo install" "Show details: oo install --verbose"
+      return 1
+    fi
+  done < <(auth_entries_for_scope "$repo" "$workflow_name" "sources")
+
+  return 0
+}
+
+collect_service_auth_issues() {
+  local repo="$1"
+  local workflow_name="$2"
+  SERVICE_AUTH_ISSUES=()
+
+  local line
+  while IFS=$'\t' read -r service_name token_env source_hint; do
+    [[ -n "$service_name" ]] || continue
+    local token_value
+    token_value="$(resolved_env_var_value "$token_env")"
+    if [[ -z "$token_value" ]]; then
+      SERVICE_AUTH_ISSUES+=("$service_name requires env $token_env")
+    fi
+  done < <(auth_entries_for_scope "$repo" "$workflow_name" "services")
+}
+
 install_selected_services_for_project() {
   local repo="$1"
   local project_name="$2"
@@ -2021,22 +2244,33 @@ run_project_dependency_commands() {
   echo "Dependencies"
   local command=""
   local label=""
+  local step_label=""
   for ((idx = 0; idx < total; idx++)); do
     command="${PROJECT_DEP_COMMANDS[$idx]}"
     label="${PROJECT_DEP_LABELS[$idx]}"
-    echo "  ... $label"
+    step_label="Installing $label"
+    if [[ "$label" == "npm install" ]]; then
+      step_label="Installing npm dependencies"
+    fi
 
     local cmd_log
-    cmd_log="$(mktemp "${TMPDIR:-/tmp}/oo-deps-${idx}-XXXXXX.log")"
+    cmd_log="$(mktemp "${TMPDIR:-/tmp}/oo-deps-${idx}-XXXXXX")"
     local cmd_status=0
-    set +e
-    (cd "$project_root" && eval "$command") >"$cmd_log" 2>&1
-    cmd_status=$?
-    set -e
-
-    if [[ "$verbose_mode" == true ]]; then
-      cat "$cmd_log"
+    local run_status=0
+    if [[ ${#OO_COMMAND_ENV_OVERRIDES[@]} -gt 0 ]]; then
+      if run_logged_step "$step_label" "$verbose_mode" "$cmd_log" env "${OO_COMMAND_ENV_OVERRIDES[@]}" bash -c "cd \"$project_root\" && $command"; then
+        run_status=0
+      else
+        run_status=$?
+      fi
+    else
+      if run_logged_step "$step_label" "$verbose_mode" "$cmd_log" bash -c "cd \"$project_root\" && $command"; then
+        run_status=0
+      else
+        run_status=$?
+      fi
     fi
+    cmd_status="$run_status"
 
     if [[ "$cmd_status" -ne 0 ]]; then
       local details=""
@@ -2066,7 +2300,6 @@ PY
     fi
 
     rm -f "$cmd_log"
-    echo "  ✓ done"
   done
 
   if [[ "$verbose_mode" != true && ${#INSTALL_WARNING_LINES[@]} -gt 0 ]]; then
@@ -2485,6 +2718,17 @@ EOF
   for workflow in "${workflows[@]}"; do
     ensure_project_exists "$workflow_repo" "$workflow"
 
+    local workflow_root_for_auth
+    workflow_root_for_auth="$(project_root_for_project "$workflow_repo" "$workflow" 2>/dev/null || true)"
+    if [[ -n "$workflow_root_for_auth" && -d "$workflow_root_for_auth" ]]; then
+      load_env_file_values "$workflow_root_for_auth"
+    else
+      OO_ENV_FILE_KEYS=()
+      OO_ENV_FILE_VALUES=()
+    fi
+
+    collect_service_auth_issues "$workflow_repo" "$workflow"
+
     load_enabled_services_for_project "$workflow_repo" "$workflow"
     if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
       if [[ "$global_mode" == true ]]; then
@@ -2531,8 +2775,31 @@ EOF
         for issue in "${project_issues[@]}"; do
           echo "  ! $issue"
         done
+        local auth_issue
+        for auth_issue in "${SERVICE_AUTH_ISSUES[@]}"; do
+          echo "  ! auth: $auth_issue"
+        done
+      fi
+      if [[ ${#SERVICE_AUTH_ISSUES[@]} -gt 0 ]]; then
+        project_issue_count=$((project_issue_count + ${#SERVICE_AUTH_ISSUES[@]}))
+        issue_count=$((issue_count + ${#SERVICE_AUTH_ISSUES[@]}))
       fi
     else
+      if [[ ${#SERVICE_AUTH_ISSUES[@]} -gt 0 ]]; then
+        fix_candidates+=("$workflow")
+        project_issue_count=$((project_issue_count + ${#SERVICE_AUTH_ISSUES[@]}))
+        issue_count=$((issue_count + ${#SERVICE_AUTH_ISSUES[@]}))
+        if [[ "$global_mode" == true ]]; then
+          echo "  ! $workflow: ${#SERVICE_AUTH_ISSUES[@]} auth issue(s)"
+        else
+          local auth_issue
+          for auth_issue in "${SERVICE_AUTH_ISSUES[@]}"; do
+            echo "  ! auth: $auth_issue"
+          done
+        fi
+        continue
+      fi
+
       if [[ "$global_mode" == true ]]; then
         echo "  ✓ $workflow: ready"
       elif [[ "$verbose_mode" == true || ${#project_ready_services[@]} -le 2 ]]; then
@@ -2697,6 +2964,7 @@ EOF
     else
       local ready_services=()
       for service in "${LOADED_PROJECT_SERVICES[@]-}"; do
+        [[ -n "$service" ]] || continue
         ready_services+=("$service")
       done
       if [[ ${#ready_services[@]} -gt 0 ]]; then
@@ -2725,6 +2993,7 @@ EOF
   if [[ ${#INSTALL_CANDIDATES[@]-0} -eq 0 ]]; then
     local ready_services=()
     for service in "${LOADED_PROJECT_SERVICES[@]-}"; do
+      [[ -n "$service" ]] || continue
       ready_services+=("$service")
     done
     if [[ ${#ready_services[@]} -gt 0 ]]; then
@@ -2754,6 +3023,9 @@ EOF
     return 1
   fi
 
+  load_env_file_values "$project_root"
+  build_env_overrides_for_command
+
   collect_project_dependency_commands "$project_root"
 
   local install_project_dependencies=false
@@ -2774,6 +3046,9 @@ EOF
   fi
 
   if [[ "$install_project_dependencies" == true ]]; then
+    if ! validate_source_auth_requirements "$workflow_repo" "$project_name"; then
+      return 1
+    fi
     if run_project_dependency_commands "$project_root" "$verbose_mode"; then
       if [[ ${#INSTALL_CHANGED_LINES[@]} -gt 0 ]]; then
         local changed_line
@@ -3356,6 +3631,20 @@ cmd_start() {
   echo "[oo] Applying overrides..."
   echo "[oo] Checking dependencies..."
   report_service_readiness_for_start "$workflow_repo" "$project_name"
+
+  local workflow_root_for_auth
+  workflow_root_for_auth="$(project_root_for_project "$workflow_repo" "$project_name" 2>/dev/null || true)"
+  if [[ -n "$workflow_root_for_auth" && -d "$workflow_root_for_auth" ]]; then
+    load_env_file_values "$workflow_root_for_auth"
+    collect_service_auth_issues "$workflow_repo" "$project_name"
+    if [[ ${#SERVICE_AUTH_ISSUES[@]} -gt 0 ]]; then
+      local auth_issue
+      for auth_issue in "${SERVICE_AUTH_ISSUES[@]}"; do
+        echo "[oo] ! auth: $auth_issue"
+      done
+      START_FAILED_SERVICES+=("auth")
+    fi
+  fi
 
   if [[ ${#START_MISSING_SERVICES[@]-0} -gt 0 || ${#START_TIMEOUT_SERVICES[@]-0} -gt 0 || ${#START_FAILED_SERVICES[@]-0} -gt 0 ]]; then
     echo
