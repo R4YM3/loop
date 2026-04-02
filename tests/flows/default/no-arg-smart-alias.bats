@@ -19,6 +19,7 @@ setup() {
   assert_output_contains "Created workflow template"
   assert_output_contains "◆ Installing default-add"
   assert_output_contains "Session started"
+  [[ "$output" != *"Run: oo install"* ]]
   assert_file_exists "$repo/.oo/workflow.yaml"
 }
 
@@ -89,4 +90,17 @@ EOF
   run_oo
   [ "$status" -eq 0 ]
   assert_output_contains "Common commands:"
+}
+
+@test "oo --plan previews smart flow for new repo" {
+  local repo="$TEST_ROOT/repos/default-plan"
+  create_git_repo "$repo"
+  cd "$repo"
+
+  run_oo --plan
+  [ "$status" -eq 0 ]
+  assert_output_contains "Plan"
+  assert_output_contains "add workflow"
+  assert_output_contains "install requirements"
+  assert_output_contains "start workflow"
 }

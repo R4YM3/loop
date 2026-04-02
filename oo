@@ -43,6 +43,7 @@ ANALYTICS_DOCTOR_ISSUES=0
 ANALYTICS_DOCTOR_DEP_ADVISORIES=0
 ANALYTICS_ERROR_CODE=""
 ANALYTICS_ERROR_DOMAIN=""
+OO_CHAINED_FLOW=false
 
 ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
 info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
@@ -251,6 +252,8 @@ Commands:
   help                         Show this help
 
 Examples:
+  oo
+  oo --plan
   oo add my-workflow
   oo add my-workflow --dry-run
   oo add
@@ -277,6 +280,7 @@ usage_quick() {
 Usage: oo <command> [options]
 
 Common commands:
+  oo [--plan]                  Smart flow (add/install/start)
   oo add [workflow-name]          Create a workflow
   oo service add <service>       Add service to current workflow
   oo service install             Install services for current workflow
@@ -2123,15 +2127,19 @@ EOF
   fi
 
   if [[ "$no_install" == true ]]; then
-    info "Run: oo install"
-    echo
-    echo "Next:"
-    echo "  Start your environment → oo install"
+    if [[ "$OO_CHAINED_FLOW" != true ]]; then
+      info "Run: oo install"
+      echo
+      echo "Next:"
+      echo "  Start your environment → oo install"
+    fi
     return 0
   fi
 
   if ! is_interactive_terminal; then
-    info "Run: oo install"
+    if [[ "$OO_CHAINED_FLOW" != true ]]; then
+      info "Run: oo install"
+    fi
     return 0
   fi
 
@@ -2647,14 +2655,294 @@ project_root_for_project() {
   echo "$root"
 }
 
+resolve_node_requirement_for_project() {
+  local project_root="$1"
+  local nvmrc_file="$project_root/.nvmrc"
+  if [[ -f "$nvmrc_file" ]]; then
+    local nvmrc_value
+    nvmrc_value="$(tr -d '[:space:]' <"$nvmrc_file" 2>/dev/null || true)"
+    if [[ -n "$nvmrc_value" ]]; then
+      echo "nvmrc|$nvmrc_value"
+      return 0
+    fi
+  fi
+
+  if [[ -f "$project_root/package.json" ]]; then
+    local engines_node
+    engines_node="$(python3 - "$project_root/package.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding='utf-8'))
+except Exception:
+    print("")
+    raise SystemExit(0)
+
+engines = data.get('engines') if isinstance(data, dict) else None
+value = engines.get('node') if isinstance(engines, dict) else None
+print(value if isinstance(value, str) else "")
+PY
+)"
+    if [[ -n "$engines_node" ]]; then
+      echo "engines|$engines_node"
+      return 0
+    fi
+  fi
+
+  echo ""
+}
+
+node_version_satisfies_requirement() {
+  local version="$1"
+  local requirement="$2"
+  python3 - "$version" "$requirement" <<'PY'
+import re
+import sys
+
+version = sys.argv[1].lstrip('v').strip()
+requirement = sys.argv[2].strip()
+
+def parse(v):
+    parts = [int(p) for p in re.findall(r'\d+', v)]
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+def cmp(a, b):
+    return (a > b) - (a < b)
+
+if not requirement:
+    print("ok")
+    raise SystemExit(0)
+
+current = parse(version)
+
+for clause in requirement.split('||'):
+    clause = clause.strip()
+    if not clause:
+        continue
+    ok = True
+    tokens = re.findall(r'(>=|<=|>|<|=)?\s*v?([0-9]+(?:\.[0-9]+){0,2})', clause)
+    if not tokens:
+        continue
+    for op, raw in tokens:
+        target = parse(raw)
+        rel = cmp(current, target)
+        op = op or '='
+        if op == '>=' and rel < 0:
+            ok = False
+            break
+        if op == '<=' and rel > 0:
+            ok = False
+            break
+        if op == '>' and rel <= 0:
+            ok = False
+            break
+        if op == '<' and rel >= 0:
+            ok = False
+            break
+        if op == '=' and rel != 0:
+            ok = False
+            break
+    if ok:
+        print("ok")
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
+recommended_node_target_from_requirement() {
+  local source_kind="$1"
+  local requirement="$2"
+
+  if [[ "$source_kind" == "nvmrc" ]]; then
+    echo "$requirement"
+    return 0
+  fi
+
+  python3 - "$requirement" <<'PY'
+import re
+import sys
+
+req = sys.argv[1].strip()
+if not req:
+    print("")
+    raise SystemExit(0)
+
+upper = None
+lower = None
+for op, raw in re.findall(r'(>=|<=|>|<|=)?\s*v?([0-9]+(?:\.[0-9]+){0,2})', req):
+    op = op or '='
+    if op in ('<=', '<', '='):
+        upper = raw
+        break
+for op, raw in re.findall(r'(>=|<=|>|<|=)?\s*v?([0-9]+(?:\.[0-9]+){0,2})', req):
+    op = op or '='
+    if op in ('>=', '>', '='):
+        lower = raw
+        break
+
+print(upper or lower or "")
+PY
+}
+
+load_nvm_in_shell_snippet() {
+  cat <<'EOF'
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then . "$NVM_DIR/nvm.sh";
+elif command -v brew >/dev/null 2>&1 && [ -s "$(brew --prefix nvm 2>/dev/null)/nvm.sh" ]; then . "$(brew --prefix nvm 2>/dev/null)/nvm.sh";
+fi
+EOF
+}
+
+ensure_node_runtime_for_project() {
+  local project_root="$1"
+  local requirement_info
+  requirement_info="$(resolve_node_requirement_for_project "$project_root")"
+  [[ -n "$requirement_info" ]] || return 0
+
+  local source_kind="${requirement_info%%|*}"
+  local requirement_value="${requirement_info#*|}"
+  local current_node
+  current_node="$(node --version 2>/dev/null || true)"
+
+  if [[ -n "$current_node" ]]; then
+    if [[ "$source_kind" == "nvmrc" ]]; then
+      if [[ "$current_node" == "v${requirement_value#v}" ]]; then
+        return 0
+      fi
+    else
+      if node_version_satisfies_requirement "$current_node" "$requirement_value"; then
+        return 0
+      fi
+    fi
+  fi
+
+  local target_version
+  target_version="$(recommended_node_target_from_requirement "$source_kind" "$requirement_value")"
+  [[ -n "$target_version" ]] || target_version="lts/*"
+
+  local nvm_setup
+  nvm_setup="$(load_nvm_in_shell_snippet)"
+  set +e
+  bash -c "$nvm_setup; command -v nvm >/dev/null 2>&1" >/dev/null 2>&1
+  local nvm_ready=$?
+  set -e
+  if [[ "$nvm_ready" -ne 0 ]]; then
+    error_block "INS-111" "Install blocked" "Node version does not satisfy project requirement and nvm is not available." --context "Required: $requirement_value | Actual: ${current_node:-missing}" "Install nvm and retry: oo install" "Use project runtime manually, then retry: oo install"
+    return 1
+  fi
+
+  local switch_log
+  switch_log="$(mktemp "${TMPDIR:-/tmp}/oo-node-switch-XXXXXX")"
+  set +e
+  bash -c "$nvm_setup; nvm install '$target_version' && nvm use '$target_version'" >"$switch_log" 2>&1
+  local switch_rc=$?
+  set -e
+  if [[ "$switch_rc" -ne 0 ]]; then
+    local details
+    details="$(python3 - "$switch_log" <<'PY'
+import sys
+from pathlib import Path
+lines = Path(sys.argv[1]).read_text(errors='replace').splitlines()
+for line in lines[-10:]:
+    print(line)
+PY
+)"
+    rm -f "$switch_log"
+    install_failure_block_with_details "INS-111" "Could not switch Node runtime to a project-compatible version." "$details" "Install Node manually and retry: oo install" "Check .nvmrc or package.json engines.node"
+    return 1
+  fi
+  rm -f "$switch_log"
+  return 0
+}
+
+js_dependency_command_prefix() {
+  local project_root="$1"
+  local requirement_info
+  requirement_info="$(resolve_node_requirement_for_project "$project_root")"
+  [[ -n "$requirement_info" ]] || return 0
+
+  local source_kind="${requirement_info%%|*}"
+  local requirement_value="${requirement_info#*|}"
+  local target_version
+  target_version="$(recommended_node_target_from_requirement "$source_kind" "$requirement_value")"
+  [[ -n "$target_version" ]] || target_version="lts/*"
+
+  local nvm_setup
+  nvm_setup="$(load_nvm_in_shell_snippet)"
+  printf '%s; nvm use "%s" >/dev/null 2>&1 || true; ' "$nvm_setup" "$target_version"
+}
+
+ensure_js_package_manager_available() {
+  local label="$1"
+  case "$label" in
+  "npm install" | "npm ci")
+    command -v npm >/dev/null 2>&1
+    return $?
+    ;;
+  "pnpm install")
+    command -v pnpm >/dev/null 2>&1 && return 0
+    command -v corepack >/dev/null 2>&1 || return 1
+    corepack enable >/dev/null 2>&1 || true
+    corepack prepare pnpm@latest --activate >/dev/null 2>&1
+    ;;
+  "yarn install")
+    command -v yarn >/dev/null 2>&1 && return 0
+    command -v corepack >/dev/null 2>&1 || return 1
+    corepack enable >/dev/null 2>&1 || true
+    corepack prepare yarn@stable --activate >/dev/null 2>&1
+    ;;
+  "bun install")
+    command -v bun >/dev/null 2>&1 && return 0
+    command -v corepack >/dev/null 2>&1 || return 1
+    corepack enable >/dev/null 2>&1 || true
+    corepack prepare bun@latest --activate >/dev/null 2>&1
+    ;;
+  *)
+    return 0
+    ;;
+  esac
+}
+
+is_js_dependency_label() {
+  local label="$1"
+  case "$label" in
+  "npm install" | "npm ci" | "pnpm install" | "yarn install" | "bun install")
+    return 0
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+}
+
 collect_project_dependency_commands() {
   local project_root="$1"
   PROJECT_DEP_COMMANDS=()
   PROJECT_DEP_LABELS=()
 
   if [[ -f "$project_root/package.json" ]]; then
-    PROJECT_DEP_COMMANDS+=("npm install")
-    PROJECT_DEP_LABELS+=("npm install")
+    if [[ -f "$project_root/bun.lockb" || -f "$project_root/bun.lock" ]]; then
+      PROJECT_DEP_COMMANDS+=("bun install")
+      PROJECT_DEP_LABELS+=("bun install")
+    elif [[ -f "$project_root/pnpm-lock.yaml" ]]; then
+      PROJECT_DEP_COMMANDS+=("pnpm install --frozen-lockfile")
+      PROJECT_DEP_LABELS+=("pnpm install")
+    elif [[ -f "$project_root/yarn.lock" ]]; then
+      PROJECT_DEP_COMMANDS+=("yarn install --frozen-lockfile")
+      PROJECT_DEP_LABELS+=("yarn install")
+    elif [[ -f "$project_root/package-lock.json" || -f "$project_root/npm-shrinkwrap.json" ]]; then
+      PROJECT_DEP_COMMANDS+=("npm ci")
+      PROJECT_DEP_LABELS+=("npm ci")
+    else
+      PROJECT_DEP_COMMANDS+=("npm install")
+      PROJECT_DEP_LABELS+=("npm install")
+    fi
   fi
 
   if [[ -f "$project_root/requirements.txt" ]]; then
@@ -2958,8 +3246,20 @@ run_project_dependency_commands() {
     command="${PROJECT_DEP_COMMANDS[$idx]}"
     label="${PROJECT_DEP_LABELS[$idx]}"
     step_label="Installing $label"
-    if [[ "$label" == "npm install" ]]; then
+    if is_js_dependency_label "$label"; then
       step_label="Installing npm dependencies"
+    fi
+
+    local command_prefix=""
+    if is_js_dependency_label "$label"; then
+      if ! ensure_node_runtime_for_project "$project_root"; then
+        return 1
+      fi
+      if ! ensure_js_package_manager_available "$label"; then
+        error_block "INS-112" "Install blocked" "Required JavaScript package manager is not available." --context "Installer: $label" "Install the package manager and retry: oo install" "Run with details: oo install --verbose"
+        return 1
+      fi
+      command_prefix="$(js_dependency_command_prefix "$project_root")"
     fi
 
     local cmd_log
@@ -2967,13 +3267,13 @@ run_project_dependency_commands() {
     local cmd_status=0
     local run_status=0
     if [[ ${#OO_COMMAND_ENV_OVERRIDES[@]} -gt 0 ]]; then
-      if run_logged_step "$step_label" "$verbose_mode" "$cmd_log" true env "${OO_COMMAND_ENV_OVERRIDES[@]}" bash -c "cd \"$project_root\" && $command"; then
+      if run_logged_step "$step_label" "$verbose_mode" "$cmd_log" true env "${OO_COMMAND_ENV_OVERRIDES[@]}" bash -c "cd \"$project_root\" && ${command_prefix}${command}"; then
         run_status=0
       else
         run_status=$?
       fi
     else
-      if run_logged_step "$step_label" "$verbose_mode" "$cmd_log" true bash -c "cd \"$project_root\" && $command"; then
+      if run_logged_step "$step_label" "$verbose_mode" "$cmd_log" true bash -c "cd \"$project_root\" && ${command_prefix}${command}"; then
         run_status=0
       else
         run_status=$?
@@ -2982,6 +3282,36 @@ run_project_dependency_commands() {
     cmd_status="$run_status"
 
     if [[ "$cmd_status" -ne 0 ]]; then
+      if is_js_dependency_label "$label" && grep -q "EBADENGINE" "$cmd_log"; then
+        local engine_required=""
+        local engine_actual=""
+        engine_required="$(python3 - "$cmd_log" <<'PY'
+import re
+import sys
+from pathlib import Path
+text = Path(sys.argv[1]).read_text(errors='replace')
+m = re.search(r'Required:\s*(\{[^\n]+\})', text)
+print(m.group(1) if m else "")
+PY
+)"
+        engine_actual="$(python3 - "$cmd_log" <<'PY'
+import re
+import sys
+from pathlib import Path
+text = Path(sys.argv[1]).read_text(errors='replace')
+m = re.search(r'Actual:\s*(\{[^\n]+\})', text)
+print(m.group(1) if m else "")
+PY
+)"
+        local context="Installer: $label"
+        if [[ -n "$engine_required" || -n "$engine_actual" ]]; then
+          context="Required: ${engine_required:-unknown} | Actual: ${engine_actual:-unknown}"
+        fi
+        rm -f "$cmd_log"
+        error_block "INS-113" "Install blocked" "Dependency install failed due to Node engine mismatch." --context "$context" "Switch Node runtime with nvm and retry: oo install" "Inspect requirements: .nvmrc or package.json engines.node"
+        return 1
+      fi
+
       local details=""
       if [[ "$verbose_mode" != true ]]; then
         details="$(python3 - "$cmd_log" <<'PY'
@@ -2999,7 +3329,7 @@ PY
     fi
 
     local summary_line=""
-    if [[ "$label" == "npm install" ]]; then
+    if [[ "$label" == "npm install" || "$label" == "npm ci" ]]; then
       while IFS= read -r summary_line; do
         [[ "$summary_line" == ADVISORY\|* ]] || continue
         local record="${summary_line#ADVISORY|}"
@@ -4742,28 +5072,55 @@ EOF
 }
 
 cmd_default() {
+  local plan_only="${1:-false}"
   local linked_project
   linked_project="$(infer_project_from_local_link)"
   local project_name=""
   local should_install=false
+  local can_add=false
 
   if [[ -z "$linked_project" ]]; then
     if is_codebase_directory "$PWD"; then
-      ANALYTICS_COMMAND="add"
-      cmd_add --no-install || return $?
-      project_name="$(infer_project_from_local_link)"
-      if [[ -z "$project_name" ]]; then
-        error "Could not resolve workflow after add"
-        return 1
-      fi
+      can_add=true
+      project_name="$(slugify_workflow_name "$(basename "$PWD")")"
       should_install=true
     else
       ANALYTICS_COMMAND="help"
+      if [[ "$plan_only" == true ]]; then
+        echo "Plan"
+        echo "  No workflow context found here"
+        echo "  Next: oo help"
+      fi
       usage_quick
       return 0
     fi
   else
     project_name="$linked_project"
+  fi
+
+  if [[ "$plan_only" == true ]]; then
+    echo "Plan"
+    if [[ "$can_add" == true ]]; then
+      echo "  • add workflow: $project_name"
+      echo "  • install requirements"
+      echo "  • start workflow"
+      return 0
+    fi
+  fi
+
+  if [[ "$can_add" == true ]]; then
+    ANALYTICS_COMMAND="add"
+    OO_CHAINED_FLOW=true
+    cmd_add --no-install || {
+      OO_CHAINED_FLOW=false
+      return 1
+    }
+    OO_CHAINED_FLOW=false
+    project_name="$(infer_project_from_local_link)"
+    if [[ -z "$project_name" ]]; then
+      error "Could not resolve workflow after add"
+      return 1
+    fi
   fi
 
   local workflow_repo
@@ -4780,11 +5137,21 @@ cmd_default() {
     return 1
   fi
 
-  if [[ "$should_install" != true ]]; then
+  if [[ "$should_install" != true && "$can_add" != true ]]; then
     report_service_readiness_for_start "$workflow_repo" "$project_name" false false
     if [[ ${#START_MISSING_SERVICES[@]-0} -gt 0 ]]; then
       should_install=true
     fi
+  fi
+
+  if [[ "$plan_only" == true ]]; then
+    if [[ "$should_install" == true ]]; then
+      echo "  • install requirements"
+      echo "  • start workflow"
+    else
+      echo "  • start workflow"
+    fi
+    return 0
   fi
 
   if [[ "$should_install" == true ]]; then
@@ -4808,6 +5175,10 @@ main() {
   case "$command" in
   "")
     cmd_default
+    ;;
+  --plan)
+    ANALYTICS_COMMAND="plan"
+    cmd_default true
     ;;
   help | -h | --help)
     cmd_help "$@"
