@@ -4,14 +4,24 @@ set -euo pipefail
 OO_REPO_URL="${OO_REPO_URL:-https://github.com/R4YM3/loop.git}"
 OO_INSTALL_ROOT="${OO_INSTALL_ROOT:-$HOME/.local/share/oo}"
 OO_BIN_DIR="${OO_BIN_DIR:-$HOME/.local/bin}"
+VERBOSE=false
+OO_PATH_PERSISTED=false
 
-ok() { printf "\033[1;32m[ok]\033[0m %s\n" "$1"; }
-info() { printf "\033[1;34m[info]\033[0m %s\n" "$1"; }
-warn() { printf "\033[1;33m[warn]\033[0m %s\n" "$1"; }
-error() { printf "\033[1;31m[error]\033[0m %s\n" "$1" >&2; }
+RAW_BOOTSTRAP_URL="https://raw.githubusercontent.com/R4YM3/loop/main/scripts/bootstrap.sh"
 
-can_prompt_user() {
-  [[ -t 0 && -t 1 ]] || [[ -r /dev/tty ]]
+failure_block() {
+  local code="$1"
+  local reason="$2"
+
+  echo "✖ Installation failed ($code)"
+  echo
+  echo "Reason"
+  echo "  $reason"
+  echo
+  echo "What you can do"
+  echo "  • Check your internet connection"
+  echo "  • Retry: curl -fsSL \"$RAW_BOOTSTRAP_URL\" | bash"
+  echo "  • Run with debug: curl -fsSL \"$RAW_BOOTSTRAP_URL\" | bash -s -- --verbose"
 }
 
 confirm_install() {
@@ -27,6 +37,18 @@ confirm_install() {
   fi
 
   [[ -z "${response:-}" || "${response:-}" =~ ^[Yy]$ ]]
+}
+
+can_prompt_user() {
+  [[ -t 0 && -t 1 ]] || [[ -r /dev/tty ]]
+}
+
+run_git() {
+  if [[ "$VERBOSE" == true ]]; then
+    git "$@"
+  else
+    git "$@" >/dev/null 2>&1
+  fi
 }
 
 detect_package_manager() {
@@ -49,30 +71,22 @@ install_requirements() {
 
   case "$manager" in
   brew)
-    info "Installing required dependencies with Homebrew"
     brew install tmux tmuxinator
     ;;
   apt-get)
-    info "Installing required dependencies with apt-get"
     sudo apt-get update
     sudo apt-get install -y tmux ruby-full
     sudo gem install tmuxinator
     ;;
   dnf)
-    info "Installing required dependencies with dnf"
     sudo dnf install -y tmux ruby rubygems
     sudo gem install tmuxinator
     ;;
   pacman)
-    info "Installing required dependencies with pacman"
     sudo pacman -Sy --noconfirm tmux ruby
     sudo gem install tmuxinator
     ;;
   *)
-    error "Could not detect a supported package manager for automatic install"
-    info "Install these required dependencies manually and rerun bootstrap:"
-    echo "  - tmux"
-    echo "  - tmuxinator"
     return 1
     ;;
   esac
@@ -84,36 +98,38 @@ ensure_required_dependencies() {
   command -v tmuxinator >/dev/null 2>&1 || missing+=("tmuxinator")
 
   if [[ ${#missing[@]} -eq 0 ]]; then
-    ok "Required dependencies are installed (tmux, tmuxinator)"
+    echo "  ✓ Required tools available (tmux, tmuxinator)"
     return 0
   fi
 
-  warn "Missing required dependencies: ${missing[*]}"
-  info "oo requires both tmux and tmuxinator."
+  echo "  ! Missing required tools: ${missing[*]}"
 
   if ! can_prompt_user; then
-    error "Cannot prompt for dependency installation in this shell"
-    info "Install required dependencies manually, then rerun bootstrap."
+    failure_block "BST-002" "Missing required tools and no interactive prompt is available."
     return 1
   fi
 
-  if ! confirm_install "Install missing required dependencies now?"; then
-    error "Bootstrap cancelled because required dependencies are missing"
+  if ! confirm_install "Install missing required tools now?"; then
+    failure_block "BST-003" "Required tools are missing and installation was canceled."
     return 1
   fi
 
-  install_requirements || return 1
+  echo "  ... Installing missing tools"
+  if ! install_requirements; then
+    failure_block "BST-004" "Could not install required tools with a supported package manager."
+    return 1
+  fi
 
   command -v tmux >/dev/null 2>&1 || {
-    error "tmux is still missing after installation"
+    failure_block "BST-005" "tmux is still missing after installation."
     return 1
   }
   command -v tmuxinator >/dev/null 2>&1 || {
-    error "tmuxinator is still missing after installation"
+    failure_block "BST-006" "tmuxinator is still missing after installation."
     return 1
   }
 
-  ok "Installed required dependencies (tmux, tmuxinator)"
+  echo "  ✓ Required tools installed (tmux, tmuxinator)"
 }
 
 detect_shell_rc_files() {
@@ -152,7 +168,6 @@ ensure_path_block_in_file() {
   [[ -f "$rc_file" ]] || touch "$rc_file"
 
   if grep -qF "$start_marker" "$rc_file"; then
-    ok "PATH block already present in $rc_file"
     return 0
   fi
 
@@ -171,8 +186,6 @@ ensure_path_block_in_file() {
       printf '%s\n' "$end_marker"
     } >>"$rc_file"
   fi
-
-  ok "Added oo PATH block to $rc_file"
 }
 
 ensure_path_persisted() {
@@ -186,69 +199,115 @@ ensure_path_persisted() {
   done < <(detect_shell_rc_files)
 
   if [[ ${#rc_files[@]} -eq 0 ]]; then
-    warn "Could not detect shell rc file from SHELL=${SHELL:-unknown}"
+    OO_PATH_PERSISTED=false
     return 0
   fi
 
   for rc_file in "${rc_files[@]}"; do
     ensure_path_block_in_file "$bin_dir" "$rc_file"
   done
+
+  OO_PATH_PERSISTED=true
 }
 
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  --verbose)
+    VERBOSE=true
+    shift
+    ;;
+  -h | --help)
+    cat <<EOF
+Usage: bash scripts/bootstrap.sh [--verbose]
+
+Installs or updates oo and configures your shell PATH.
+EOF
+    exit 0
+    ;;
+  *)
+    echo "Unknown option: $1" >&2
+    exit 1
+    ;;
+  esac
+done
+
 if [[ -z "$OO_REPO_URL" ]]; then
-  error "OO_REPO_URL is empty."
-  info "Set OO_REPO_URL and rerun, for example:"
-  echo "  OO_REPO_URL='https://github.com/R4YM3/loop.git' bash scripts/bootstrap.sh"
+  failure_block "BST-001" "OO_REPO_URL is empty."
   exit 1
 fi
 
 if ! command -v git >/dev/null 2>&1; then
-  error "git is required for bootstrap"
+  failure_block "BST-007" "git is required for installation."
   exit 1
 fi
 
+echo "◆ Installing oo"
+echo
+
+echo "Checking system"
 ensure_required_dependencies || exit 1
+echo
+
+echo "Preparing installation"
+echo "  Location: ${OO_INSTALL_ROOT/#$HOME/~}"
 
 mkdir -p "$(dirname "$OO_INSTALL_ROOT")"
 
+before_rev=""
+after_rev=""
+
 if [[ -d "$OO_INSTALL_ROOT/.git" ]]; then
-  info "Updating existing installation at $OO_INSTALL_ROOT"
-  git -C "$OO_INSTALL_ROOT" pull --ff-only
+  before_rev="$(git -C "$OO_INSTALL_ROOT" rev-parse --short HEAD 2>/dev/null || true)"
+  echo "  ✓ Existing installation found"
 elif [[ -e "$OO_INSTALL_ROOT" ]]; then
-  error "Install root exists and is not a git checkout: $OO_INSTALL_ROOT"
-  info "Remove it manually or choose another location with OO_INSTALL_ROOT"
+  failure_block "BST-008" "Install location exists but is not a git checkout."
   exit 1
 else
-  info "Cloning oo repository into $OO_INSTALL_ROOT"
-  git clone "$OO_REPO_URL" "$OO_INSTALL_ROOT"
+  echo "  ✓ Creating installation directory"
+fi
+echo
+
+echo "Updating runtime"
+if [[ -d "$OO_INSTALL_ROOT/.git" ]]; then
+  if ! run_git -C "$OO_INSTALL_ROOT" pull --ff-only; then
+    failure_block "BST-009" "Could not fetch runtime from repository."
+    exit 1
+  fi
+else
+  if ! run_git clone "$OO_REPO_URL" "$OO_INSTALL_ROOT"; then
+    failure_block "BST-010" "Could not clone runtime repository."
+    exit 1
+  fi
 fi
 
-info "Ensuring latest runtime revision"
-git -C "$OO_INSTALL_ROOT" pull --ff-only
+after_rev="$(git -C "$OO_INSTALL_ROOT" rev-parse --short HEAD 2>/dev/null || true)"
+if [[ -n "$before_rev" && "$before_rev" == "$after_rev" ]]; then
+  echo "  ✓ Already up to date ($after_rev)"
+elif [[ -n "$before_rev" ]]; then
+  echo "  ✓ Updated to latest version ($after_rev)"
+else
+  echo "  ✓ Installed runtime ($after_rev)"
+fi
+echo
 
+echo "Configuring CLI"
 mkdir -p "$OO_BIN_DIR"
 ln -sfn "$OO_INSTALL_ROOT/oo" "$OO_BIN_DIR/oo"
 chmod +x "$OO_INSTALL_ROOT/oo"
-ok "Installed CLI symlink: $OO_BIN_DIR/oo"
-
 ensure_path_persisted "$OO_BIN_DIR"
 
-case ":$PATH:" in
-*":$OO_BIN_DIR:"*)
-  ok "$OO_BIN_DIR is on PATH"
-  ;;
-*)
-  warn "$OO_BIN_DIR is not on PATH"
-  info "Add this line to your shell rc file:"
-  printf '  export PATH="%s:$PATH"\n' "$OO_BIN_DIR"
-  ;;
-esac
-
-ok "Bootstrap complete"
+if [[ "$OO_PATH_PERSISTED" == true ]]; then
+  echo "  ✓ CLI symlink installed"
+  echo "  ✓ PATH configured"
+else
+  echo "  ✓ CLI symlink installed"
+  echo "  ! PATH was not configured automatically"
+fi
 echo
-info "Next steps:"
-echo "  exec \"\$SHELL\" -l"
-echo "  cd /path/to/your/codebase"
-echo "  oo add"
-echo "  oo install"
-echo "  oo start"
+
+echo "✓ Installation complete"
+echo
+echo "Next:"
+echo "  1. Restart your shell → exec \"\$SHELL\" -l"
+echo "  2. Open your workflow repo → cd /path/to/your/codebase"
+echo "  3. Initialize → oo add"
