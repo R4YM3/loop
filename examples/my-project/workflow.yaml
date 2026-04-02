@@ -1,5 +1,5 @@
-name: my-project
-root: /path/to/my-project
+name: my-workflow
+root: /path/to/my-workflow
 
 startup_window: web
 

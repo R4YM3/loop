@@ -63,7 +63,7 @@ def include_window(name, folder:, overrides: {})
 end
 
 def load_project_override(project_name)
-  override_file = resolve_repo_file("developer/projects/#{project_name}.override.yml")
+  override_file = resolve_repo_file("override/workflows/#{project_name}.override.yml")
   return {} unless override_file
 
   data = YAML.safe_load(File.read(override_file), aliases: false)
@@ -71,7 +71,7 @@ def load_project_override(project_name)
 end
 
 def read_project_override(project_name)
-  override_file = resolve_repo_file("developer/projects/#{project_name}.override.yml")
+  override_file = resolve_repo_file("override/workflows/#{project_name}.override.yml")
   return "" unless override_file
 
   File.read(override_file)

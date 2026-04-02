@@ -6,7 +6,7 @@ setup() {
   export TEAM_ROOT="$TEST_ROOT/team-workflows"
   configure_workflow_root "$TEAM_ROOT"
 
-  local repo="$TEST_ROOT/repos/strict-project"
+  local repo="$TEST_ROOT/repos/strict-workflow"
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
@@ -18,7 +18,7 @@ setup() {
 }
 
 @test "oo start --strict fails when service is not ready" {
-  cd "$TEST_ROOT/repos/strict-project"
+  cd "$TEST_ROOT/repos/strict-workflow"
 
   run_oo start --strict --no-attach
   [ "$status" -ne 0 ]

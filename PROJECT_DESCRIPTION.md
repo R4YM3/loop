@@ -1,4 +1,4 @@
-# Loop Project Description
+# Loop Workflow Description
 
 ## Product Summary
 
@@ -6,20 +6,20 @@
 
 It is used to:
 
-- create project/workspace workflow config,
+- create workflow/workspace workflow config,
 - prepare local environment setup,
 - manage reusable services,
-- run and diagnose project workflows.
+- run and diagnose workflows.
 
 Target platform: macOS + Linux (WSL counts as Linux context).
 
 ## Core Terminology
 
-- **project** = runnable development workflow
+- **workflow** = runnable development workflow
 - **service** = reusable workflow unit (e.g. web, api, worker, redis)
 - **command** = executable run instruction
-- **requirements** = what must be installed to support project/services
-- **environment setup** = install machine/project prerequisites
+- **requirements** = what must be installed to support workflow/services
+- **environment setup** = install machine/workflow prerequisites
 - **runtime** = workflow execution
 
 Important: command sources (like `package.json` scripts) are command sources, not services.
@@ -56,17 +56,17 @@ oo uninstall
 
 Top-level commands:
 
-- `oo add [project-name] [--dry-run] [--no-install]`
-- `oo remove <project-name> [--yes]`
-- `oo install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]`
-- `oo service add <service> [--project <project>]`
-- `oo service remove <service> [--project <project>]`
-- `oo service list [--project <project> | --global]`
-- `oo service install [--project <project>] [--yes] | --global [--yes]`
-- `oo start <project> [args...] [--strict]`
-- `oo stop <project>`
+- `oo add [workflow-name] [--dry-run] [--no-install]`
+- `oo remove <workflow-name> [--yes]`
+- `oo install [--workflow <workflow>] [--yes] [--plan] [--no-workflow-deps] [--verbose]`
+- `oo service add <service> [--workflow <workflow>]`
+- `oo service remove <service> [--workflow <workflow>]`
+- `oo service list [--workflow <workflow> | --global]`
+- `oo service install [--workflow <workflow>] [--yes] | --global [--yes]`
+- `oo start <workflow> [args...] [--strict]`
+- `oo stop <workflow>`
 - `oo status`
-- `oo doctor [--project <project> | --global] [--fix] [--yes] [--verbose]`
+- `oo doctor [--workflow <workflow> | --global] [--fix] [--yes] [--verbose]`
 - `oo validate`
 - `oo list`
 - `oo demo [target-dir]`
@@ -75,7 +75,7 @@ Top-level commands:
 - `oo version`
 - `oo help`
 
-Most commands can infer project context when run inside a linked repository.
+Most commands can infer workflow context when run inside a linked repository.
 
 ## Output and Return Behavior
 
@@ -117,18 +117,18 @@ Examples:
   - supports skipping setup with `--no-install`
 - `oo install`
   - installs required environment setup,
-  - installs project dependencies,
+  - installs workflow dependencies,
   - supports `--plan` preview mode
 - `oo start`
   - starts workflow,
   - warns in non-strict mode when setup is incomplete,
   - fails in strict mode with code `RUN-022`
 - `oo doctor`
-  - prints grouped diagnostics (`Environment`, `Project`, result)
+  - prints grouped diagnostics (`Environment`, `Workflow`, result)
   - defaults to collapsed healthy output
   - supports `--verbose` for expanded checks
 
-## Main Developer Flows
+## Main Workflow Flows
 
 ### Flow A: First-Time Setup
 
@@ -140,7 +140,7 @@ Examples:
 
 1. `oo add --dry-run`
 2. `oo add`
-3. `oo install --project <name>`
+3. `oo install --workflow <name>`
 4. `oo doctor`
 5. `oo start <name>`
 
@@ -150,7 +150,7 @@ Examples:
 2. `oo install --yes`
 3. `oo start`
 
-### Flow D: Existing Project Service Update
+### Flow D: Existing Workflow Service Update
 
 1. `oo service add redis`
 2. `oo install` (or `oo service install`)
@@ -161,16 +161,16 @@ Examples:
 `oo install` does both:
 
 1. machine readiness requirements
-2. project dependencies
+2. workflow dependencies
 
 Default behavior:
 
 - setup and dependency install run without repeated prompts,
 - supports `--yes` for non-interactive execution,
 - supports `--plan` for trust-first preview,
-- supports `--no-project-deps` to limit scope to environment setup.
+- supports `--no-workflow-deps` to limit scope to environment setup.
 
-Project dependency installers are detected from project root:
+Workflow dependency installers are detected from workflow root:
 
 - `package.json` -> `npm install`
 - `requirements.txt` -> `pip3 install -r requirements.txt`
@@ -179,7 +179,7 @@ Project dependency installers are detected from project root:
 
 ## Runtime and Readiness Behavior
 
-- `oo` tracks per-project service install state/version/config hash.
+- `oo` tracks per-workflow service install state/version/config hash.
 - `oo start` checks readiness before starting.
 - Non-strict mode:
   - warns when requirements are missing,
@@ -194,10 +194,10 @@ Project dependency installers are detected from project root:
 - `.oo/workflow.yaml`
 - `.oo/override.yaml`
 
-Workflow root stores per-project config:
+Workflow root stores per-workflow config:
 
-- `<team-workflows-root>/<project>/workflow.yaml`
-- `<team-workflows-root>/<project>/override.yaml`
+- `<team-workflows-root>/<workflow>/workflow.yaml`
+- `<team-workflows-root>/<workflow>/override.yaml`
 
 Workspace mode:
 
@@ -207,7 +207,7 @@ Workspace mode:
 
 `oo` is responsible for:
 
-- project/workspace detection,
+- workflow/workspace detection,
 - service selection/management,
 - requirements intent,
 - install/start UX and diagnostics.
@@ -226,6 +226,6 @@ Desired README qualities:
 
 - clear and practical,
 - concept-first,
-- focused on real developer usage,
+- focused on real workflow usage,
 - includes install + quickstart + command reference + flows,
 - consistent terminology.

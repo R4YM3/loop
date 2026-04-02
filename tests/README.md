@@ -42,9 +42,9 @@ tests/scripts/test-act full
 - `oo add` single repo flow -> `tests/flows/add/single-repo.bats`
 - `oo add` workspace auto-detect -> `tests/flows/add/workspace-auto-detect.bats`
 - `oo add --dry-run` writes nothing -> `tests/flows/add/dry-run.bats`
-- `oo start` project inference -> `tests/flows/start/infer-project.bats`
+- `oo start` workflow inference -> `tests/flows/start/infer-workflow.bats`
 - `oo start --strict` behavior -> `tests/flows/start/strict-mode.bats`
-- `oo service` inferred context -> `tests/flows/service/inferred-project-context.bats`
-- `oo doctor` runtime/project checks -> `tests/flows/doctor/runtime-and-project.bats`
+- `oo service` inferred context -> `tests/flows/service/inferred-workflow-context.bats`
+- `oo doctor` runtime/workflow checks -> `tests/flows/doctor/runtime-and-workflow.bats`
 - `oo status` output -> `tests/flows/status/sessions-and-health.bats`
 - `oo stop` flow -> `tests/flows/stop/stop-session.bats`

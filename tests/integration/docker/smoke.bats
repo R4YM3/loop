@@ -16,13 +16,13 @@ setup() {
 }
 
 @test "oo add works in clean container workspace" {
-  local repo="$TEST_ROOT/repos/docker-project"
+  local repo="$TEST_ROOT/repos/docker-workflow"
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
 
   run_oo add
   [ "$status" -eq 0 ]
-  run test -f "$TEAM_ROOT/docker-project/workflow.yaml"
+  run test -f "$TEAM_ROOT/docker-workflow/workflow.yaml"
   [ "$status" -eq 0 ]
 }

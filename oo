@@ -65,33 +65,33 @@ usage() {
 Usage: oo <command> [options]
 
 Commands:
-  add [project-name] [--dry-run] [--no-install]
-                               Create a project workflow
-  remove <project-name> [--yes]
-                               Remove project workflow and alias
+  add [workflow-name] [--dry-run] [--no-install]
+                               Create a workflow
+  remove <workflow-name> [--yes]
+                               Remove workflow and alias
   service <command> [...]       Manage reusable services
-  demo [target-dir]             Scaffold a working demo project
-  status                       Show running projects and service health
+  demo [target-dir]             Scaffold a working demo workflow
+  status                       Show running workflows and service health
   validate                     Validate workflow files
   doctor                       Run environment diagnostics
-  install [--project <name>] [--yes] [--plan] [--no-project-deps] [--verbose]
-                               Install machine readiness and project dependencies
+  install [--workflow <name>] [--yes] [--plan] [--no-workflow-deps] [--verbose]
+                               Install machine readiness and workflow dependencies
   update                       Pull latest oo runtime repo
-  list                         List projects and installed aliases
-  start <project> [args...]    Start a project workflow (supports --strict)
-  stop <project>               Stop a running project workflow
+  list                         List workflows and installed aliases
+  start <workflow> [args...]    Start a workflow (supports --strict)
+  stop <workflow>               Stop a running workflow
   uninstall [--yes]            Remove global oo CLI installation
   version                      Print oo version
   help                         Show this help
 
 Examples:
-  oo add my-project
-  oo add my-project --dry-run
+  oo add my-workflow
+  oo add my-workflow --dry-run
   oo add
-  oo remove my-project
+  oo remove my-workflow
   oo service add node
   oo service install
-  oo service add redis --project other-project
+  oo service add redis --workflow other-workflow
   oo demo
   oo status
   oo validate
@@ -99,8 +99,8 @@ Examples:
   oo install
   oo install --yes
   oo update
-  oo start my-project
-  oo stop my-project
+  oo start my-workflow
+  oo stop my-workflow
 EOF
 }
 
@@ -109,14 +109,14 @@ usage_quick() {
 Usage: oo <command> [options]
 
 Common commands:
-  oo add [project-name]          Create a project workflow
-  oo service add <service>       Add service to current project
-  oo service install             Install services for current project
-  oo start [project]             Start workflow
-  oo stop [project]              Stop workflow
+  oo add [workflow-name]          Create a workflow
+  oo service add <service>       Add service to current workflow
+  oo service install             Install services for current workflow
+  oo start [workflow]             Start workflow
+  oo stop [workflow]              Stop workflow
   oo status                      Show running workflows and health
   oo doctor                      Diagnose issues and show fixes
-  oo install                     Install environment setup for project
+  oo install                     Install environment setup for workflow
 
 Help:
   oo help                        Show this quick help
@@ -185,18 +185,18 @@ cmd_help() {
     ;;
   start)
     cat <<'EOF'
-Usage: oo start <project-name> [tmuxinator args...] [--strict]
+Usage: oo start <workflow-name> [tmuxinator args...] [--strict]
 
 Starts a workflow session.
-If no project is provided, oo tries to infer it from current context.
+If no workflow is provided, oo tries to infer it from current context.
 EOF
     ;;
   stop)
     cat <<'EOF'
-Usage: oo stop <project-name>
+Usage: oo stop <workflow-name>
 
 Stops a running workflow session.
-If no project is provided, oo tries to infer it from current context.
+If no workflow is provided, oo tries to infer it from current context.
 EOF
     ;;
   demo)
@@ -210,21 +210,21 @@ EOF
     cat <<'EOF'
 Usage: oo status
 
-Shows running project sessions and service readiness.
+Shows running workflow sessions and service readiness.
 EOF
     ;;
   list)
     cat <<'EOF'
 Usage: oo list
 
-Lists team workflow projects and installed tmuxinator aliases.
+Lists team workflows and installed tmuxinator aliases.
 EOF
     ;;
   validate)
     cat <<'EOF'
 Usage: oo validate
 
-Validates workflow project files in the configured team workflow root.
+Validates workflow files in the configured team workflow root.
 EOF
     ;;
   update)
@@ -236,10 +236,10 @@ EOF
     ;;
   install)
     cat <<'EOF'
-Usage: oo install [--project <project>] [--yes]
+Usage: oo install [--workflow <workflow>] [--yes]
 
-Installs machine readiness requirements and project dependencies.
-If no project is provided, oo tries to infer it from current context.
+Installs machine readiness requirements and workflow dependencies.
+If no workflow is provided, oo tries to infer it from current context.
 EOF
     ;;
   version)
@@ -271,7 +271,7 @@ version() {
 validate_project_name() {
   local project_name="$1"
   if [[ ! "$project_name" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-    error "Invalid project name: '$project_name'"
+    error "Invalid workflow name: '$project_name'"
     info "Use lowercase letters, numbers, and dashes only (must start with letter or number)."
     exit 1
   fi
@@ -336,7 +336,7 @@ ensure_workflow_root_for_add() {
   if [[ -n "$configured" ]]; then
     if [[ "$configured" == "$RUNTIME_DIR" ]]; then
       error "Configured team workflow root points to oo runtime repository"
-      info "Run oo add from your project and choose a separate workflow root"
+      info "Run oo add from your workflow and choose a separate workflow root"
       exit 1
     fi
     echo "$configured"
@@ -408,7 +408,7 @@ require_workflow_repo() {
   repo="$(detect_workflow_repo)"
   if [[ -z "$repo" ]]; then
     error "No team workflow root is configured"
-    info "Run: oo add <project-name>"
+    info "Run: oo add <workflow-name>"
     exit 1
   fi
   echo "$repo"
@@ -684,8 +684,8 @@ ensure_project_exists() {
   template_file="$(resolve_project_template_file "$repo" "$project_name")"
 
   if [[ ! -f "$template_file" ]]; then
-    error "Project template not found: $template_file"
-    info "Add the project first: oo add $project_name"
+    error "Workflow template not found: $template_file"
+    info "Add the workflow first: oo add $project_name"
     exit 1
   fi
 }
@@ -1129,22 +1129,22 @@ write_repo_readme() {
 
 This repository is managed with \`oo\` and is intended to live outside application repositories.
 
-- Project workflows: \`<project>/workflow.yaml\`
-- Project overrides: \`<project>/override.yaml\`
+- Workflow workflows: \`<workflow>/workflow.yaml\`
+- Workflow overrides: \`<workflow>/override.yaml\`
 
 Typical flow:
 
 \`\`\`bash
-oo service install --project $first_project
+oo service install --workflow $first_project
 oo validate
 oo doctor
 oo start $first_project
 \`\`\`
 
-You can add more projects later from this same repo:
+You can add more workflows later from this same repo:
 
 \`\`\`bash
-oo add another-project
+oo add another-workflow
 \`\`\`
 EOF
 }
@@ -1164,8 +1164,8 @@ resolve_alias_conflict() {
     local tmuxinator_file="$TMUXINATOR_DIR/$name.yml"
 
     if [[ -e "$project_file" || -e "$override_file" ]]; then
-      error "Project files already exist for '$name' in this workflow repo"
-      info "Choose a different project name."
+      error "Workflow files already exist for '$name' in this workflow repo"
+      info "Choose a different workflow name."
       exit 1
     fi
 
@@ -1192,7 +1192,7 @@ resolve_alias_conflict() {
       info "Current alias target: $(readlink "$tmuxinator_file")"
     fi
     echo "Choose one:"
-    echo "  [r] rename project"
+    echo "  [r] rename workflow"
     echo "  [p] replace alias"
     local choice=""
     read -r -p "Your choice [r/p]: " choice
@@ -1200,9 +1200,9 @@ resolve_alias_conflict() {
     case "${choice:-}" in
     r | R)
       local renamed=""
-      read -r -p "Enter new project name: " renamed
+      read -r -p "Enter new workflow name: " renamed
       if [[ -z "$renamed" ]]; then
-        error "Project name cannot be empty"
+        error "Workflow name cannot be empty"
         continue
       fi
       validate_project_name "$renamed"
@@ -1249,7 +1249,7 @@ link_project_alias() {
     ok "Replaced tmuxinator alias: $tmuxinator_file -> $source_file"
     ;;
   same)
-    ok "tmuxinator alias already points to project file: $tmuxinator_file"
+    ok "tmuxinator alias already points to workflow file: $tmuxinator_file"
     ;;
   *)
     error "Unknown alias mode: $mode"
@@ -1280,15 +1280,15 @@ ensure_local_workflow_link() {
   local quiet="${4:-false}"
   local local_dir="$repo_dir/.oo"
   local project_link="$local_dir/workflow.yaml"
-  local developer_link="$local_dir/override.yaml"
+  local override_link="$local_dir/override.yaml"
   local source_project_file
-  local source_developer_file
+  local source_override_file
   source_project_file="$(resolve_project_template_file "$(dirname "$project_dir")" "$project_name")"
-  source_developer_file="$(resolve_project_override_file "$(dirname "$project_dir")" "$project_name")"
+  source_override_file="$(resolve_project_override_file "$(dirname "$project_dir")" "$project_name")"
 
   mkdir -p "$local_dir"
   ln -sfn "$source_project_file" "$project_link"
-  ln -sfn "$source_developer_file" "$developer_link"
+  ln -sfn "$source_override_file" "$override_link"
   if [[ "$quiet" != true ]]; then
     ok "Created local workflow links in: $local_dir"
   fi
@@ -1325,10 +1325,10 @@ cmd_add() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: oo add [project-name] [--dry-run] [--no-install]
+Usage: oo add [workflow-name] [--dry-run] [--no-install]
 
-- Creates a project workflow in the configured team workflow root.
-- If project-name is omitted, defaults to current folder name.
+- Creates a workflow in the configured team workflow root.
+- If workflow-name is omitted, defaults to current folder name.
 EOF
       return 0
       ;;
@@ -1372,14 +1372,14 @@ EOF
   fi
 
   if [[ "$add_mode" == "workspace" && ${#workspace_repos[@]} -lt 2 ]]; then
-    warn "Workspace mode selected, but fewer than 2 child codebases detected; continuing as single project"
+    warn "Workspace mode selected, but fewer than 2 child codebases detected; continuing as single workflow"
     add_mode="single"
   fi
 
   if [[ "$add_mode" == "workspace" && -t 0 && "$dry_run" != true ]]; then
     info "Detected multi-repo workspace with ${#workspace_repos[@]} repositories"
     if ! confirm_remove "Create one workspace workflow for this directory?"; then
-      info "Continuing with single-project add mode"
+      info "Continuing with single-workflow add mode"
       add_mode="single"
     fi
   fi
@@ -1397,7 +1397,7 @@ EOF
 
     if [[ -t 0 ]]; then
       local entered_name=""
-      read -r -p "Project name [$default_name]: " entered_name
+      read -r -p "Workflow name [$default_name]: " entered_name
       project_name="${entered_name:-$default_name}"
     fi
   fi
@@ -1444,8 +1444,8 @@ EOF
       echo "Would create workflow repo in: $workflow_repo"
       echo "  README.md"
     fi
-    echo "Would create project directory: $project_root_dir"
-    echo "Would create project files:"
+    echo "Would create workflow directory: $project_root_dir"
+    echo "Would create workflow files:"
     echo "  $project_file"
     echo "  $override_file"
     if [[ "$add_mode" == "workspace" ]]; then
@@ -1460,7 +1460,7 @@ EOF
       echo "Would auto-enable suggested services: ${suggested_services[*]}"
     fi
     if [[ "$add_mode" == "single" ]]; then
-      echo "Mode: minimal project content"
+      echo "Mode: minimal workflow content"
     fi
 
     case "$alias_mode" in
@@ -1471,7 +1471,7 @@ EOF
       echo "Would replace tmuxinator alias: $TMUXINATOR_DIR/$final_name.yml"
       ;;
     same)
-      echo "tmuxinator alias already points to this project"
+      echo "tmuxinator alias already points to this workflow"
       ;;
     esac
     return 0
@@ -1511,7 +1511,7 @@ EOF
   ensure_local_workflow_link "$final_name" "$project_root_dir" "$source_root"
 
   ok "Created workflow template: $project_file"
-  ok "Created developer override: $override_file"
+  ok "Created override file: $override_file"
   if [[ ${#suggested_services[@]} -gt 0 ]]; then
     info "Auto-enabled suggested services: ${suggested_services[*]}"
   fi
@@ -1529,7 +1529,7 @@ EOF
     return 0
   fi
 
-  cmd_install --project "$final_name" --yes
+  cmd_install --workflow "$final_name" --yes
 }
 
 cmd_remove() {
@@ -1544,9 +1544,9 @@ cmd_remove() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: oo remove <project-name> [--yes]
+Usage: oo remove <workflow-name> [--yes]
 
-Removes the tmuxinator alias for a project, then optionally removes
+Removes the tmuxinator alias for a workflow, then optionally removes
 local override/template files when running inside a workflow repo.
 EOF
       return 0
@@ -1564,8 +1564,8 @@ EOF
   done
 
   if [[ -z "$project_name" ]]; then
-    error "Missing project name"
-    info "Usage: oo remove <project-name> [--yes]"
+    error "Missing workflow name"
+    info "Usage: oo remove <workflow-name> [--yes]"
     exit 1
   fi
 
@@ -1576,7 +1576,7 @@ EOF
 
   local tmuxinator_file="$TMUXINATOR_DIR/$project_name.yml"
   if [[ ! -e "$tmuxinator_file" ]]; then
-    warn "Project alias not found: $tmuxinator_file"
+    warn "Workflow alias not found: $tmuxinator_file"
   fi
 
   if [[ -e "$tmuxinator_file" ]] && ([[ -L "$tmuxinator_file" ]] || [[ -f "$tmuxinator_file" ]]); then
@@ -1590,14 +1590,14 @@ EOF
   local project_path
   project_path="$(project_dir "$repo" "$project_name")"
   if [[ -d "$project_path" ]]; then
-    if [[ "$assume_yes" == true ]] || confirm_remove "Remove project directory '$project_path'?"; then
+    if [[ "$assume_yes" == true ]] || confirm_remove "Remove workflow directory '$project_path'?"; then
       rm -rf "$project_path"
-      ok "Removed project directory: $project_path"
+      ok "Removed workflow directory: $project_path"
     else
-      info "Kept project directory: $project_path"
+      info "Kept workflow directory: $project_path"
     fi
   else
-    info "Project directory not found: $project_path"
+    info "Workflow directory not found: $project_path"
   fi
 }
 
@@ -1634,7 +1634,7 @@ run_service_install_for_project() {
   load_enabled_services_for_project "$repo" "$project_name"
 
   if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
-    info "No services configured for project '$project_name'."
+    info "No services configured for workflow '$project_name'."
     return 0
   fi
 
@@ -1643,11 +1643,11 @@ run_service_install_for_project() {
     build_service_state_context "$repo" "$project_name" "$service"
 
     if service_state_matches "$project_name" "$service" "$SERVICE_CTX_VERSION" "$SERVICE_CTX_CONFIG_HASH"; then
-      ok "Service '$service' is already installed for project '$project_name'"
+      ok "Service '$service' is already installed for workflow '$project_name'"
       continue
     fi
 
-    info "Installing service '$service' for project '$project_name'"
+    info "Installing service '$service' for workflow '$project_name'"
     if ! OO_SERVICE_CONFIG_JSON="$SERVICE_CTX_CONFIG_JSON" OO_SERVICE_ASSUME_YES="$assume_yes" bash "$SERVICE_CTX_SCRIPT" install; then
       error "Service install failed: $service"
       exit 1
@@ -1917,11 +1917,11 @@ run_project_dependency_commands() {
   local total=${#PROJECT_DEP_COMMANDS[@]}
 
   if [[ "$total" -eq 0 ]]; then
-    info "No project dependency installers detected"
+    info "No workflow dependency installers detected"
     return 0
   fi
 
-  echo "Project dependencies"
+  echo "Workflow dependencies"
   local command=""
   local label=""
   for ((idx = 0; idx < total; idx++)); do
@@ -1929,7 +1929,7 @@ run_project_dependency_commands() {
     label="${PROJECT_DEP_LABELS[$idx]}"
     echo "  ... $label"
     if ! (cd "$project_root" && eval "$command"); then
-      error_block "INS-012" "Install failed" "$label exited with a non-zero status" "Run again with --verbose" "Check project dependency files"
+      error_block "INS-012" "Install failed" "$label exited with a non-zero status" "Run again with --verbose" "Check workflow dependency files"
       return 1
     fi
     echo "  ✓ done"
@@ -1947,9 +1947,9 @@ parse_service_project_args() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-    --project)
+    --workflow)
       [[ $# -ge 2 ]] || {
-        error "--project requires a project name"
+        error "--workflow requires a workflow name"
         exit 1
       }
       PARSED_PROJECT_NAME="$2"
@@ -1975,14 +1975,14 @@ parse_service_project_args() {
   if [[ -z "$PARSED_PROJECT_NAME" ]]; then
     PARSED_PROJECT_NAME="$(infer_start_project_from_context)"
     if [[ -n "$PARSED_PROJECT_NAME" ]]; then
-      info "No --project provided; inferred '$PARSED_PROJECT_NAME'"
+      info "No --workflow provided; inferred '$PARSED_PROJECT_NAME'"
     fi
   fi
 
   [[ -n "$PARSED_PROJECT_NAME" ]] || {
-    error "Missing project context"
+    error "Missing workflow context"
     info "$usage"
-    info "Tip: run from a linked project repo or pass --project <name>"
+    info "Tip: run from a linked workflow repo or pass --workflow <name>"
     exit 1
   }
 }
@@ -1998,9 +1998,9 @@ parse_service_scope_args() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-    --project)
+    --workflow)
       [[ $# -ge 2 ]] || {
-        error "--project requires a project name"
+        error "--workflow requires a workflow name"
         exit 1
       }
       PARSED_PROJECT_NAME="$2"
@@ -2028,20 +2028,20 @@ parse_service_scope_args() {
   done
 
   if [[ -n "$PARSED_PROJECT_NAME" && "$PARSED_GLOBAL" == true ]]; then
-    error "Use either --project or --global, not both"
+    error "Use either --workflow or --global, not both"
     exit 1
   fi
 
   if [[ -z "$PARSED_PROJECT_NAME" && "$PARSED_GLOBAL" != true ]]; then
     PARSED_PROJECT_NAME="$(infer_start_project_from_context)"
     if [[ -n "$PARSED_PROJECT_NAME" ]]; then
-      info "No --project provided; inferred '$PARSED_PROJECT_NAME'"
+      info "No --workflow provided; inferred '$PARSED_PROJECT_NAME'"
     fi
   fi
 }
 
 cmd_service_add() {
-  parse_service_project_args "Usage: oo service add <service> [--project <project>]" "$@"
+  parse_service_project_args "Usage: oo service add <service> [--workflow <workflow>]" "$@"
   validate_project_name "$PARSED_PROJECT_NAME"
   require_service "$PARSED_SERVICE_NAME"
 
@@ -2050,18 +2050,18 @@ cmd_service_add() {
   ensure_project_exists "$repo" "$PARSED_PROJECT_NAME"
 
   add_service_to_project_config "$repo" "$PARSED_PROJECT_NAME" "$PARSED_SERVICE_NAME"
-  ok "Added service '$PARSED_SERVICE_NAME' to project '$PARSED_PROJECT_NAME'"
+  ok "Added service '$PARSED_SERVICE_NAME' to workflow '$PARSED_PROJECT_NAME'"
   local inferred_project
   inferred_project="$(infer_start_project_from_context)"
   if [[ "$inferred_project" == "$PARSED_PROJECT_NAME" ]]; then
     info "Run: oo service install"
   else
-    info "Run: oo service install --project $PARSED_PROJECT_NAME"
+    info "Run: oo service install --workflow $PARSED_PROJECT_NAME"
   fi
 }
 
 cmd_service_remove() {
-  parse_service_project_args "Usage: oo service remove <service> [--project <project>]" "$@"
+  parse_service_project_args "Usage: oo service remove <service> [--workflow <workflow>]" "$@"
   validate_project_name "$PARSED_PROJECT_NAME"
 
   local repo
@@ -2069,11 +2069,11 @@ cmd_service_remove() {
   ensure_project_exists "$repo" "$PARSED_PROJECT_NAME"
 
   remove_service_from_project_config "$repo" "$PARSED_PROJECT_NAME" "$PARSED_SERVICE_NAME"
-  ok "Removed service '$PARSED_SERVICE_NAME' from project '$PARSED_PROJECT_NAME'"
+  ok "Removed service '$PARSED_SERVICE_NAME' from workflow '$PARSED_PROJECT_NAME'"
 }
 
 cmd_service_list() {
-  parse_service_scope_args "Usage: oo service list [--project <project> | --global]" false "$@"
+  parse_service_scope_args "Usage: oo service list [--workflow <workflow> | --global]" false "$@"
 
   echo "Available services:"
   local available=()
@@ -2110,7 +2110,7 @@ cmd_service_list() {
   fi
 
   echo
-  echo "Configured services by project:"
+  echo "Configured services by workflow:"
   local proj=""
   while IFS= read -r proj; do
     [[ -n "$proj" ]] || continue
@@ -2126,10 +2126,10 @@ cmd_service_list() {
 }
 
 cmd_service_install() {
-  parse_service_scope_args "Usage: oo service install [--project <project>] [--yes] | --global [--yes]" true "$@"
+  parse_service_scope_args "Usage: oo service install [--workflow <workflow>] [--yes] | --global [--yes]" true "$@"
 
   if [[ -z "$PARSED_PROJECT_NAME" && "$PARSED_GLOBAL" != true ]]; then
-    error "Missing scope: use --project <name>, --global, or run from a linked project repo"
+    error "Missing scope: use --workflow <name>, --global, or run from a linked workflow repo"
     exit 1
   fi
 
@@ -2154,10 +2154,10 @@ cmd_service_help() {
 Usage: oo service <command> [options]
 
 Commands:
-  add <service> [--project <project>]
-  remove <service> [--project <project>]
-  list [--project <project> | --global]
-  install [--project <project>] [--yes]
+  add <service> [--workflow <workflow>]
+  remove <service> [--workflow <workflow>]
+  list [--workflow <workflow> | --global]
+  install [--workflow <workflow>] [--yes]
   install --global [--yes]
 EOF
 }
@@ -2206,9 +2206,9 @@ cmd_doctor() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-    --project)
+    --workflow)
       [[ $# -ge 2 ]] || {
-        error "--project requires a project name"
+        error "--workflow requires a workflow name"
         exit 1
       }
       project_name="$2"
@@ -2232,7 +2232,7 @@ cmd_doctor() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: oo doctor [--project <project> | --global] [--fix] [--yes] [--verbose]
+Usage: oo doctor [--workflow <workflow> | --global] [--fix] [--yes] [--verbose]
 
 Diagnoses runtime and service readiness.
 Use --fix to run safe automatic service installs.
@@ -2247,7 +2247,7 @@ EOF
   done
 
   if [[ -n "$project_name" && "$global_mode" == true ]]; then
-    error "Use either --project or --global, not both"
+    error "Use either --workflow or --global, not both"
     exit 1
   fi
 
@@ -2283,15 +2283,15 @@ EOF
 
   echo "◆ Doctor"
   if [[ "$global_mode" == true ]]; then
-    echo "  Project: all"
+    echo "  Workflow: all"
   elif [[ -n "$project_name" ]]; then
     if [[ "$inferred_project" == true ]]; then
-      echo "  Project: $project_name (inferred)"
+      echo "  Workflow: $project_name (inferred)"
     else
-      echo "  Project: $project_name"
+      echo "  Workflow: $project_name"
     fi
   else
-    echo "  Project: none"
+    echo "  Workflow: none"
   fi
   echo
 
@@ -2305,18 +2305,18 @@ EOF
   fi
   echo
 
-  local projects=()
+  local workflows=()
   local proj=""
   local workflow_repo
   workflow_repo="$(detect_workflow_repo)"
 
   if [[ -z "$project_name" && "$global_mode" != true && -z "$workflow_repo" ]]; then
-    error "No project context found"
-    info "Run from a linked project repo, or pass --project <name> or --global"
+    error "No workflow context found"
+    info "Run from a linked workflow repo, or pass --workflow <name> or --global"
     exit 1
   fi
 
-  echo "Project"
+  echo "Workflow"
 
   if [[ -z "$workflow_repo" ]]; then
     echo "  ! Team workflow root is not configured"
@@ -2325,23 +2325,23 @@ EOF
   elif [[ "$global_mode" == true ]]; then
     while IFS= read -r proj; do
       [[ -n "$proj" ]] || continue
-      projects+=("$proj")
+      workflows+=("$proj")
     done < <(list_projects_in_repo "$workflow_repo")
   elif [[ -n "$project_name" ]]; then
     validate_project_name "$project_name"
-    projects+=("$project_name")
+    workflows+=("$project_name")
   fi
 
   local fix_candidates=()
-  local project
+  local workflow
 
-  for project in "${projects[@]}"; do
-    ensure_project_exists "$workflow_repo" "$project"
+  for workflow in "${workflows[@]}"; do
+    ensure_project_exists "$workflow_repo" "$workflow"
 
-    load_enabled_services_for_project "$workflow_repo" "$project"
+    load_enabled_services_for_project "$workflow_repo" "$workflow"
     if [[ ${#LOADED_PROJECT_SERVICES[@]} -eq 0 ]]; then
       if [[ "$global_mode" == true ]]; then
-        echo "  ✓ $project: no services configured"
+        echo "  ✓ $workflow: no services configured"
       else
         echo "  ✓ No services configured"
       fi
@@ -2354,7 +2354,7 @@ EOF
     local project_issues=()
     for service in "${LOADED_PROJECT_SERVICES[@]}"; do
       require_service "$service"
-      build_service_state_context "$workflow_repo" "$project" "$service"
+      build_service_state_context "$workflow_repo" "$workflow" "$service"
 
       local check_rc=0
       set +e
@@ -2374,11 +2374,11 @@ EOF
     done
 
     if [[ "$project_needs_fix" == true ]]; then
-      fix_candidates+=("$project")
+      fix_candidates+=("$workflow")
       project_issue_count=$((project_issue_count + ${#project_issues[@]}))
       issue_count=$((issue_count + ${#project_issues[@]}))
       if [[ "$global_mode" == true ]]; then
-        echo "  ! $project: ${#project_issues[@]} issue(s)"
+        echo "  ! $workflow: ${#project_issues[@]} issue(s)"
       else
         local issue
         for issue in "${project_issues[@]}"; do
@@ -2387,14 +2387,14 @@ EOF
       fi
     else
       if [[ "$global_mode" == true ]]; then
-        echo "  ✓ $project: ready"
+        echo "  ✓ $workflow: ready"
       elif [[ "$verbose_mode" == true || ${#project_ready_services[@]} -le 2 ]]; then
         local ready_service
         for ready_service in "${project_ready_services[@]}"; do
           echo "  ✓ $(service_display_name "$ready_service") ready"
         done
       else
-        echo "  ✓ All project services ready ($(join_by_comma "${project_ready_services[@]}"))"
+        echo "  ✓ All workflow services ready ($(join_by_comma "${project_ready_services[@]}"))"
       fi
     fi
   done
@@ -2402,12 +2402,12 @@ EOF
   echo
   local install_cmd="oo install"
   if [[ "$global_mode" == true ]]; then
-    install_cmd="oo install --project <project>"
+    install_cmd="oo install --workflow <workflow>"
   elif [[ -n "$project_name" ]]; then
     local inferred
     inferred="$(infer_start_project_from_context)"
     if [[ "$inferred" != "$project_name" ]]; then
-      install_cmd="oo install --project $project_name"
+      install_cmd="oo install --workflow $project_name"
     fi
   fi
 
@@ -2421,7 +2421,7 @@ EOF
     fi
   else
     if [[ "$env_issue_count" -gt 0 && "$project_issue_count" -gt 0 ]]; then
-      echo "✖ Project not ready (DOC-021)"
+      echo "✖ Workflow not ready (DOC-021)"
     else
       echo "! Setup incomplete"
     fi
@@ -2434,7 +2434,7 @@ EOF
 
   if [[ "$fix_mode" == true && ${#fix_candidates[@]} -gt 0 ]]; then
     if [[ "$assume_yes" != true ]]; then
-      if ! confirm_remove "Run safe service installs for suggested projects?"; then
+      if ! confirm_remove "Run safe service installs for suggested workflows?"; then
         info "Skipped automatic fixes"
         return 0
       fi
@@ -2447,7 +2447,7 @@ EOF
         continue
       fi
       seen="${seen},$p"
-      info "Applying fixes for project '$p'"
+      info "Applying fixes for workflow '$p'"
       run_service_install_for_project "$workflow_repo" "$p" "$assume_yes"
     done
     ok "Doctor fix run completed"
@@ -2464,9 +2464,9 @@ cmd_install() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-    --project)
+    --workflow)
       [[ $# -ge 2 ]] || {
-        error "--project requires a project name"
+        error "--workflow requires a workflow name"
         exit 1
       }
       project_name="$2"
@@ -2480,7 +2480,7 @@ cmd_install() {
       plan_only=true
       shift
       ;;
-    --no-project-deps)
+    --no-workflow-deps)
       skip_project_deps=true
       shift
       ;;
@@ -2490,15 +2490,15 @@ cmd_install() {
       ;;
     -h | --help)
       cat <<'EOF'
-Usage: oo install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]
+Usage: oo install [--workflow <workflow>] [--yes] [--plan] [--no-workflow-deps] [--verbose]
 
-Installs machine readiness requirements and project dependencies.
+Installs machine readiness requirements and workflow dependencies.
 EOF
       return 0
       ;;
     *)
       error "Unexpected argument: $1"
-      info "Usage: oo install [--project <project>] [--yes] [--plan] [--no-project-deps] [--verbose]"
+      info "Usage: oo install [--workflow <workflow>] [--yes] [--plan] [--no-workflow-deps] [--verbose]"
       exit 1
       ;;
     esac
@@ -2507,14 +2507,14 @@ EOF
   if [[ -z "$project_name" ]]; then
     project_name="$(infer_start_project_from_context)"
     if [[ -n "$project_name" ]]; then
-      info "No --project provided; inferred '$project_name'"
+      info "No --workflow provided; inferred '$project_name'"
     fi
   fi
 
   if [[ -z "$project_name" ]]; then
-    error "Missing project name"
-    info "Usage: oo install [--project <project>] [--yes]"
-    info "Tip: run from a linked project repo or pass --project <name>"
+    error "Missing workflow name"
+    info "Usage: oo install [--workflow <workflow>] [--yes]"
+    info "Tip: run from a linked workflow repo or pass --workflow <name>"
     exit 1
   fi
 
@@ -2564,11 +2564,11 @@ EOF
     if [[ -n "$project_root_plan" && -d "$project_root_plan" ]]; then
       collect_project_dependency_commands "$project_root_plan"
       if [[ "$skip_project_deps" == true ]]; then
-        echo "  Project dependencies: skipped by flag"
+        echo "  Workflow dependencies: skipped by flag"
       elif [[ ${#PROJECT_DEP_COMMANDS[@]} -gt 0 ]]; then
-        echo "  Will run project dependencies: $(join_by_comma "${PROJECT_DEP_LABELS[@]}")"
+        echo "  Will run workflow dependencies: $(join_by_comma "${PROJECT_DEP_LABELS[@]}")"
       else
-        echo "  Project dependencies: none detected"
+        echo "  Workflow dependencies: none detected"
       fi
     fi
     return 0
@@ -2603,7 +2603,7 @@ EOF
   local project_root
   project_root="$(project_root_for_project "$workflow_repo" "$project_name")"
   if [[ -z "$project_root" || ! -d "$project_root" ]]; then
-    error_block "INS-021" "Install failed" "Could not resolve project root from workflow config" "Run again with --verbose" "Check project workflow config files"
+    error_block "INS-021" "Install failed" "Could not resolve workflow root from workflow config" "Run again with --verbose" "Check workflow config files"
     return 1
   fi
 
@@ -2628,18 +2628,18 @@ EOF
 
   if [[ "$install_project_dependencies" == true ]]; then
     if run_project_dependency_commands "$project_root"; then
-      changed_items+=("project dependencies")
+      changed_items+=("workflow dependencies")
     else
       return 1
     fi
   elif [[ "$skip_project_deps" == true ]]; then
-    echo "Project dependencies"
-    echo "  ✓ skipped (--no-project-deps)"
+    echo "Workflow dependencies"
+    echo "  ✓ skipped (--no-workflow-deps)"
   elif [[ ${#PROJECT_DEP_COMMANDS[@]} -eq 0 ]]; then
-    echo "Project dependencies"
+    echo "Workflow dependencies"
     echo "  ✓ none detected"
   else
-    echo "Project dependencies"
+    echo "Workflow dependencies"
     echo "  ✓ skipped"
   fi
 
@@ -2652,7 +2652,7 @@ EOF
   fi
   echo
   echo "Next:"
-  echo "  Run your project → oo start"
+  echo "  Run your workflow → oo start"
 }
 
 cmd_update() {
@@ -2768,7 +2768,7 @@ cmd_list() {
   repo="$(read_configured_workflow_root)"
   if [[ -z "$repo" || ! -d "$repo" ]]; then
     info "No team workflow root configured."
-    info "Run: oo add <project-name>"
+    info "Run: oo add <workflow-name>"
     echo
   else
     echo "Team workflows ($repo):"
@@ -2807,7 +2807,7 @@ cmd_status() {
   local repo
   repo="$(read_configured_workflow_root)"
 
-  echo "Running project sessions:"
+  echo "Running workflow sessions:"
   if command -v tmux >/dev/null 2>&1; then
     local sessions
     sessions="$(tmux ls 2>/dev/null || true)"
@@ -2826,12 +2826,12 @@ cmd_status() {
   if [[ -z "$repo" || ! -d "$repo" ]]; then
     echo
     info "No team workflow root configured yet"
-    info "Run: oo add <project-name>"
+    info "Run: oo add <workflow-name>"
     return 0
   fi
 
   echo
-  echo "Project service health:"
+  echo "Workflow service health:"
   local proj=""
   local found=false
   while IFS= read -r proj; do
@@ -2859,7 +2859,7 @@ cmd_status() {
     [[ "$any" == true ]] || echo "  - (no services configured)"
   done < <(list_projects_in_repo "$repo")
 
-  [[ "$found" == true ]] || echo "  (no projects found)"
+  [[ "$found" == true ]] || echo "  (no workflows found)"
 }
 
 cmd_demo() {
@@ -2962,10 +2962,10 @@ EOF
 
   cd "$old_pwd"
 
-  ok "Demo project created"
+  ok "Demo workflow created"
   info "Try it now:"
   echo "  cd \"$target_dir\""
-  echo "  oo service install --project oo-demo"
+  echo "  oo service install --workflow oo-demo"
   echo "  oo start oo-demo"
 }
 
@@ -3131,22 +3131,22 @@ cmd_start() {
   local start_args=()
 
   if [[ $# -eq 0 || "${1:-}" == -* ]]; then
-    if [[ "${1:-}" == "--project" ]]; then
-      error "Invalid option for oo start: --project"
-      info "Usage: oo start <project-name> [tmuxinator args...] [--strict]"
+    if [[ "${1:-}" == "--workflow" ]]; then
+      error "Invalid option for oo start: --workflow"
+      info "Usage: oo start <workflow-name> [tmuxinator args...] [--strict]"
       info "Tip: use 'oo start test-repo' or run from that repo and use 'oo start'"
       exit 1
     fi
 
     project_name="$(infer_start_project_from_context)"
     if [[ -z "$project_name" ]]; then
-      error "Missing project name and could not infer one from current directory"
-      info "Usage: oo start <project-name> [tmuxinator args...] [--strict]"
-      info "Tip: run from your project repo and use 'oo start', or pass project explicitly"
+      error "Missing workflow name and could not infer one from current directory"
+      info "Usage: oo start <workflow-name> [tmuxinator args...] [--strict]"
+      info "Tip: run from your workflow repo and use 'oo start', or pass workflow explicitly"
       exit 1
     fi
 
-    info "No project name provided; inferred '$project_name'"
+    info "No workflow name provided; inferred '$project_name'"
   else
     project_name="$1"
     shift
@@ -3171,7 +3171,7 @@ cmd_start() {
   local tmuxinator_status=0
   local had_session_before=false
 
-  echo "[oo] Project: $project_name"
+  echo "[oo] Workflow: $project_name"
 
   if tmux has-session -t "$project_name" 2>/dev/null; then
     had_session_before=true
@@ -3191,13 +3191,13 @@ cmd_start() {
 
   config_source_file="$(project_template_file "$workflow_repo" "$project_name")"
   if [[ ! -f "$config_source_file" ]]; then
-    error "Project template not found for '$project_name': $config_source_file"
-    info "Add the project first with: oo add $project_name"
+    error "Workflow template not found for '$project_name': $config_source_file"
+    info "Add the workflow first with: oo add $project_name"
     exit 1
   fi
 
   echo "[oo] Loading services..."
-  echo "[oo] Applying developer overrides..."
+  echo "[oo] Applying overrides..."
   echo "[oo] Checking dependencies..."
   report_service_readiness_for_start "$workflow_repo" "$project_name"
 
@@ -3205,15 +3205,15 @@ cmd_start() {
     echo
     local inferred_project
     inferred_project="$(infer_start_project_from_context)"
-    local install_cmd="oo install --project $project_name"
-    local doctor_cmd="oo doctor --project $project_name"
+    local install_cmd="oo install --workflow $project_name"
+    local doctor_cmd="oo doctor --workflow $project_name"
     if [[ "$inferred_project" == "$project_name" ]]; then
       install_cmd="oo install"
       doctor_cmd="oo doctor"
     fi
 
     if [[ "$strict_mode" == true ]]; then
-      error_block "RUN-022" "Start blocked" "Strict mode requires a fully prepared environment, but setup is incomplete." --context "Project: $project_name" "Install environment: $install_cmd" "Check status: $doctor_cmd" "Retry (strict): oo start --strict"
+      error_block "RUN-022" "Start blocked" "Strict mode requires a fully prepared environment, but setup is incomplete." --context "Workflow: $project_name" "Install environment: $install_cmd" "Check status: $doctor_cmd" "Retry (strict): oo start --strict"
       return 1
     fi
 
@@ -3275,11 +3275,11 @@ cmd_stop() {
   if [[ -z "$project_name" || "$project_name" == -* ]]; then
     project_name="$(infer_start_project_from_context)"
     if [[ -z "$project_name" ]]; then
-      error "Missing project name"
-      info "Usage: oo stop <project-name>"
+      error "Missing workflow name"
+      info "Usage: oo stop <workflow-name>"
       exit 1
     fi
-    info "No project name provided; inferred '$project_name'"
+    info "No workflow name provided; inferred '$project_name'"
   fi
 
   if ! command -v tmux >/dev/null 2>&1; then
@@ -3309,7 +3309,7 @@ cmd_uninstall() {
 Usage: oo uninstall [--yes]
 
 Removes global oo CLI installation (symlink and install root).
-This does not remove tmuxinator project aliases.
+This does not remove tmuxinator workflow aliases.
 EOF
       return 0
       ;;

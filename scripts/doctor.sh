@@ -48,9 +48,9 @@ for dir in "${project_dirs[@]}"; do
 done
 
 if [[ ${#project_files[@]} -eq 0 ]]; then
-  warn "No workflow project templates found in $WORKFLOW_REPO_DIR"
+  warn "No workflow templates found in $WORKFLOW_REPO_DIR"
 else
-  ok "Found ${#project_files[@]} project template(s)"
+  ok "Found ${#project_files[@]} workflow template(s)"
 fi
 
 project_file=""

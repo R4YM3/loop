@@ -1,6 +1,6 @@
 /developer/**
 !/developer/.gitkeep
-!/developer/projects/
-!/developer/projects/.gitkeep
-!/developer/projects/*.override.yml
+!/developer/workflows/
+!/developer/workflows/.gitkeep
+!/developer/workflows/*.override.yml
 /.internal/

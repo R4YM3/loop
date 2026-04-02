@@ -8,7 +8,7 @@ No onboarding guesswork. No setup drift. No "works on my machine" loops.
 
 ## Why teams use Loop
 
-- **Faster onboarding**: new developers can get running through a guided setup flow.
+- **Faster onboarding**: teams can get running through a guided setup flow.
 - **Consistent environments**: teams start the same workflow the same way.
 - **Lower daily friction**: startup becomes a short, repeatable command sequence.
 - **Team defaults + personal overrides**: shared standards without losing local flexibility.
@@ -39,11 +39,11 @@ With Loop:
 
 ## Core concepts
 
-- **project**: runnable development workflow
+- **workflow**: runnable development workflow
 - **service**: reusable workflow unit (for example: web, api, worker, redis)
 - **command**: executable run instruction
 - **requirements**: what must be installed
-- **environment setup**: preparing machine and project prerequisites
+- **environment setup**: preparing machine and workflow prerequisites
 - **runtime**: executing the workflow
 
 ## Installation
@@ -83,13 +83,13 @@ Notes:
 
 ## Typical workflow
 
-1. **Create or link a project**
+1. **Create or link a workflow**
 
    ```bash
    oo add
    ```
 
-   - detects project or workspace context,
+   - detects workflow or workspace context,
    - creates workflow config,
    - links `.oo/` files.
 
@@ -100,7 +100,7 @@ Notes:
    ```
 
    - installs missing system requirements,
-   - installs project dependencies.
+   - installs workflow dependencies.
 
 3. **Start your workflow**
 
@@ -117,19 +117,19 @@ Notes:
    oo doctor
    ```
 
-   - checks environment and project readiness,
+   - checks environment and workflow readiness,
    - highlights blocking issues and next actions.
 
 ## Command overview
 
-### Project
+### Workflow
 
 - `oo add [--dry-run] [--no-install]`
 - `oo remove`
 
 ### Environment setup
 
-- `oo install [--yes] [--plan] [--no-project-deps] [--verbose]`
+- `oo install [--yes] [--plan] [--no-workflow-deps] [--verbose]`
 
 ### Services
 
@@ -186,7 +186,7 @@ What you can do
 - `CFG-*` configuration issues
 - `SYS-*` internal/system issues
 
-## Team + developer config
+## Team + override config
 
 Loop separates shared and personal configuration:
 
@@ -207,14 +207,14 @@ Workflows live in a central root and are linked into local repositories:
 
 ```text
 <team-workflows-root>/
-├── project-a/
+├── workflow-a/
 │   ├── workflow.yaml
 │   └── override.yaml
 ```
 
 ## Dependency detection
 
-Loop detects project dependency systems automatically:
+Loop detects workflow dependency systems automatically:
 
 - `package.json` -> `npm install`
 - `requirements.txt` -> `pip3 install -r requirements.txt`
@@ -235,7 +235,7 @@ oo start
 ```bash
 oo add --dry-run
 oo add
-oo install --project <name>
+oo install --workflow <name>
 oo doctor
 oo start <name>
 ```
@@ -262,7 +262,7 @@ Loop is:
 
 - a local development workflow orchestrator,
 - a consistency layer for teams,
-- a CLI-first developer tool.
+- a CLI-first workflow tool.
 
 Loop is not:
 

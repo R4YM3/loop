@@ -6,7 +6,7 @@ setup() {
   export TEAM_ROOT="$TEST_ROOT/team-workflows"
   configure_workflow_root "$TEAM_ROOT"
 
-  local repo="$TEST_ROOT/repos/status-project"
+  local repo="$TEST_ROOT/repos/status-workflow"
   create_git_repo "$repo"
   touch "$repo/package.json"
   cd "$repo"
@@ -14,10 +14,10 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "oo status shows running sessions section and project health" {
+@test "oo status shows running sessions section and workflow health" {
   run_oo status
   [ "$status" -eq 0 ]
-  assert_output_contains "Running project sessions"
-  assert_output_contains "Project service health"
-  assert_output_contains "status-project"
+  assert_output_contains "Running workflow sessions"
+  assert_output_contains "Workflow service health"
+  assert_output_contains "status-workflow"
 }

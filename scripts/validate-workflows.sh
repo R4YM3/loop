@@ -25,11 +25,11 @@ for dir in "${project_dirs[@]}"; do
 done
 
 [[ "$project_count" -gt 0 ]] || {
-  echo "[error] No project templates found in $WORKFLOW_REPO_DIR" >&2
+  echo "[error] No workflow templates found in $WORKFLOW_REPO_DIR" >&2
   exit 1
 }
 
-echo "[info] Validating $project_count workflow project(s)..."
+echo "[info] Validating $project_count workflow(s)..."
 
 for dir in "${project_dirs[@]}"; do
   [[ -d "$dir" ]] || continue
