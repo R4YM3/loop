@@ -4741,14 +4741,74 @@ EOF
   fi
 }
 
+cmd_default() {
+  local linked_project
+  linked_project="$(infer_project_from_local_link)"
+  local project_name=""
+  local should_install=false
+
+  if [[ -z "$linked_project" ]]; then
+    if is_codebase_directory "$PWD"; then
+      ANALYTICS_COMMAND="add"
+      cmd_add --no-install || return $?
+      project_name="$(infer_project_from_local_link)"
+      if [[ -z "$project_name" ]]; then
+        error "Could not resolve workflow after add"
+        return 1
+      fi
+      should_install=true
+    else
+      ANALYTICS_COMMAND="help"
+      usage_quick
+      return 0
+    fi
+  else
+    project_name="$linked_project"
+  fi
+
+  local workflow_repo
+  workflow_repo="$(detect_workflow_repo)"
+  if [[ -z "$workflow_repo" ]]; then
+    error "No workflow context available"
+    return 1
+  fi
+
+  local template_file
+  template_file="$(resolve_project_template_file "$workflow_repo" "$project_name")"
+  if [[ ! -f "$template_file" ]]; then
+    error "Workflow template not found for '$project_name'"
+    return 1
+  fi
+
+  if [[ "$should_install" != true ]]; then
+    report_service_readiness_for_start "$workflow_repo" "$project_name" false false
+    if [[ ${#START_MISSING_SERVICES[@]-0} -gt 0 ]]; then
+      should_install=true
+    fi
+  fi
+
+  if [[ "$should_install" == true ]]; then
+    ANALYTICS_COMMAND="install"
+    cmd_install --workflow "$project_name" || return $?
+  fi
+
+  ANALYTICS_COMMAND="start"
+  cmd_start "$project_name"
+}
+
 main() {
-  local command="${1:-help}"
-  shift || true
+  local command="${1:-}"
+  if [[ -n "$command" ]]; then
+    shift || true
+  fi
 
   analytics_begin "$command" "$@"
   trap 'analytics_finalize "$?"' EXIT
 
   case "$command" in
+  "")
+    cmd_default
+    ;;
   help | -h | --help)
     cmd_help "$@"
     ;;
